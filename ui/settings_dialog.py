@@ -82,7 +82,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(title_label)
 
         # 1. Model Selection
-        model_group = QGroupBox("Whisper Model (NVIDIA RTX 3060)")
+        model_group = QGroupBox("Whisper Model")
         model_layout = QVBoxLayout(model_group)
         self.model_combo = QComboBox()
         models = [

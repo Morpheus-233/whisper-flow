@@ -162,21 +162,3 @@ class WhisperEngine:
 
         return cleaned
 
-    def quick_check_stop(self, audio_data):
-        """Quickly check if the user said 'stop' at the end of the audio snippet."""
-        if self.model is None:
-            return False, ""
-        try:
-            segments, _ = self.model.transcribe(
-                audio_data,
-                beam_size=1,  # greedy search for maximum speed
-                vad_filter=False
-            )
-            text = " ".join([s.text.strip() for s in segments]).strip().lower()
-            text_clean = text.rstrip(".!,? ")
-            for kw in ["stop", "stop recording", "finish", "done"]:
-                if text_clean.endswith(kw):
-                    return True, text
-            return False, text
-        except Exception:
-            return False, ""

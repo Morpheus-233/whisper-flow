@@ -439,7 +439,8 @@ class WhisperFlowApp:
             self.audio_engine.stop_recording()
         QApplication.quit()
 
-LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_startup.log")
+import tempfile
+LOG_FILE = os.path.join(tempfile.gettempdir(), "whisper_flow_startup.log")
 
 def log_debug(msg):
     try:
@@ -459,21 +460,6 @@ def exception_hook(exctype, value, tb):
     sys.__excepthook__(exctype, value, tb)
 
 sys.excepthook = exception_hook
-
-def ensure_interactive_desktop():
-    try:
-        from ctypes import wintypes
-        user32 = ctypes.windll.user32
-        user32.OpenDesktopW.restype = wintypes.HDESK
-        user32.SetThreadDesktop.argtypes = [wintypes.HDESK]
-        user32.SetThreadDesktop.restype = wintypes.BOOL
-
-        h_desk = user32.OpenDesktopW("Default", 0, False, 0x01FF)
-        if h_desk:
-            user32.SetThreadDesktop(h_desk)
-            log_debug("Connected to interactive desktop session.")
-    except Exception as e:
-        log_debug(f"Desktop connection notice: {e}")
 
 def main():
     log_debug("=== main() started ===")

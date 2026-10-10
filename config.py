@@ -7,7 +7,6 @@ DEFAULT_CONFIG = {
     "model_name": "base.en",
     "device": "cuda",
     "compute_type": "float16",
-    "listen_for_stop_word": False,
     "paste_mode": "instant_paste",  # Automatically inserts text directly into the target box
     "global_hotkey": "ctrl+alt+space",
     "sound_effects": False,
