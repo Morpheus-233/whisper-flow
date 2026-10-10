@@ -1,0 +1,49 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# C extensions
+*.obj
+*.o
+*.a
+*.lib
+*.pyd
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Scratch & development logs
+scratch/
+*.log
+*.txt
+!requirements.txt
+app_startup.log
+crash_debug.txt
+crash_faulthandler.txt
+debug_launch.log
+err.log
+err.txt
+out.log
+out.txt
+runner_debug.log
+@AutomationLog.txt
+
+# Local runtime configuration
+config.json
+
+# IDEs & System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
