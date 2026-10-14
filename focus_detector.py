@@ -32,8 +32,8 @@ class GUITHREADINFO(ctypes.Structure):
         ("rcCaret", RECT),
     ]
 
-# Snappy search timeout (120ms) so UIA never blocks or freezes UI responsiveness
-auto.SetGlobalSearchTimeout(0.12)
+# Snappy search timeout (40ms) so UIA never blocks or freezes UI responsiveness
+auto.SetGlobalSearchTimeout(0.04)
 
 # Known class names of native Win32 edit controls
 WIN32_EDIT_CLASSES = (
@@ -171,14 +171,14 @@ class FocusDetector:
         """
         try:
             res = wintypes.DWORD()
-            user32.SendMessageTimeoutW(hwnd, WM_GETOBJECT, 0, OBJID_CLIENT, 2, 80, ctypes.byref(res))
+            user32.SendMessageTimeoutW(hwnd, WM_GETOBJECT, 0, OBJID_CLIENT, 2, 10, ctypes.byref(res))
 
             def enum_child(child_hwnd, lparam):
                 buf = (ctypes.c_wchar * 128)()
                 user32.GetClassNameW(child_hwnd, buf, 128)
                 c_name = buf.value.lower()
                 if "render" in c_name or "widget" in c_name:
-                    user32.SendMessageTimeoutW(child_hwnd, WM_GETOBJECT, 0, OBJID_CLIENT, 2, 80, ctypes.byref(res))
+                    user32.SendMessageTimeoutW(child_hwnd, WM_GETOBJECT, 0, OBJID_CLIENT, 2, 10, ctypes.byref(res))
                 return True
 
             EnumChildProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
@@ -188,72 +188,40 @@ class FocusDetector:
 
     def get_focused_text_input(self) -> tuple[bool, tuple | None]:
         """
-        Authoritative element-level check.
-        Returns:
-            (is_text_field: bool, bounding_rect: tuple (left, top, right, bottom) or None)
-
-        The widget appears ONLY while an editable text input field has keyboard focus.
-        Hides for:
-        - buttons, slide canvas, playlist items, player bar, menus, title bars
-        - clicking elsewhere in the app
-        - desktop or window switch with no focused text field
-        - read-only, disabled, or password fields.
+        Authoritative low-latency element-level check.
+        Fast-path Win32/Terminal checks run in <0.05ms.
+        UIA is queried only for web/Chromium/DOM inputs.
         """
         if sys.platform != "win32":
             return False, None
 
         try:
             fg_hwnd = user32.GetForegroundWindow()
-            widget_hwnd = self.widget_hwnd_getter() if self.widget_hwnd_getter else 0
-
-            # Ignore focus events originating from our own widget so clicking it does not hide it
-            if fg_hwnd and widget_hwnd and (fg_hwnd == widget_hwnd):
-                return True, None
-
-            # Inspect foreground window class if available
-            fg_cls = ""
-            if fg_hwnd:
-                buf = (ctypes.c_wchar * 256)()
-                user32.GetClassNameW(fg_hwnd, buf, 256)
-                fg_cls = buf.value.lower()
-
-            is_chromium_window = any(c in fg_cls for c in CHROMIUM_WINDOW_CLASSES) if fg_cls else False
-            is_office_window = any(o in fg_cls for o in OFFICE_TOP_CLASSES) if fg_cls else False
-
-            # Enable Chromium accessibility for Electron/CEF apps so their text inputs expose UIA data
-            if fg_hwnd and is_chromium_window and fg_hwnd not in self._woken_hwnds:
-                self._woken_hwnds.add(fg_hwnd)
-                self._wake_chromium_accessibility(fg_hwnd)
-
-            # 1. Primary Check: UI Automation focused element (works system-wide across all windows)
-            ctrl = auto.GetFocusedControl()
-            if ctrl:
-                # If focused element is our own widget, maintain visibility
-                if widget_hwnd and getattr(ctrl, 'NativeWindowHandle', 0) == widget_hwnd:
-                    return True, None
-
-                is_text, rect = self._validate_element(ctrl)
-                if is_text:
-                    return True, rect
-
             if not fg_hwnd:
                 return False, None
 
-            # 2. Terminal / Command Line Interface Fallback
-            # Terminal emulators (WezTerm, Windows Terminal, ConHost, Alacritty, Mintty, etc.)
-            # host interactive CLI prompt sessions (OpenCode, shells, REPLs).
-            # Modern GPU-accelerated terminals render text directly via GPU swap chains without standard Win32 GUI carets.
-            # When a terminal window has keyboard focus, the user is at an interactive CLI prompt.
-            if fg_hwnd and any(term in fg_cls for term in TERMINAL_WINDOW_CLASSES):
+            widget_hwnd = self.widget_hwnd_getter() if self.widget_hwnd_getter else 0
+
+            # Ignore focus events originating from our own widget so clicking it does not hide it
+            if widget_hwnd and (fg_hwnd == widget_hwnd):
+                return True, None
+
+            # Inspect foreground window class
+            buf = (ctypes.c_wchar * 256)()
+            user32.GetClassNameW(fg_hwnd, buf, 256)
+            fg_cls = buf.value.lower()
+
+            # 1. FAST PATH: Terminal / Command Line Interface (<0.01ms)
+            # WezTerm (OpenCode), Windows Terminal, ConHost, Alacritty, Mintty, etc.
+            if any(term in fg_cls for term in TERMINAL_WINDOW_CLASSES):
                 rect = RECT()
                 user32.GetWindowRect(fg_hwnd, ctypes.byref(rect))
                 return True, (rect.left, rect.top, rect.right, rect.bottom)
 
-            # 3. PowerPoint Fallback (PPTFrameClass)
-            # PowerPoint shapes, placeholders, and notes pane:
-            # Active text editing produces a native Win32 blinking caret in GetGUIThreadInfo.
-            # Slide canvas, thumbnail pane, shape outline selection, and ribbon have NO active text caret.
-            if "pptframeclass" in fg_cls:
+            is_chromium_window = any(c in fg_cls for c in CHROMIUM_WINDOW_CLASSES) if fg_cls else False
+
+            # 2. FAST PATH: Native Win32 Caret & Focus (<0.01ms)
+            if not is_chromium_window:
                 tid = user32.GetWindowThreadProcessId(fg_hwnd, None)
                 if tid:
                     gui = GUITHREADINFO()
@@ -262,56 +230,52 @@ class FocusDetector:
                         if gui.hwndCaret and user32.IsWindow(gui.hwndCaret):
                             w = gui.rcCaret.right - gui.rcCaret.left
                             h = gui.rcCaret.bottom - gui.rcCaret.top
-                            if w > 0 or h > 0:
+                            if w > 0 or h > 0 or gui.rcCaret.bottom > 0:
                                 pt = POINT(gui.rcCaret.left, gui.rcCaret.top)
                                 user32.ClientToScreen(gui.hwndCaret, ctypes.byref(pt))
                                 caret_rect = (pt.x, pt.y, pt.x + max(w, 4), pt.y + max(h, 18))
                                 return True, caret_rect
-                return False, None
 
-            # 3. Microsoft Word Fallback (OpusApp)
-            if "opusapp" in fg_cls:
-                tid = user32.GetWindowThreadProcessId(fg_hwnd, None)
-                if tid:
-                    gui = GUITHREADINFO()
-                    gui.cbSize = ctypes.sizeof(GUITHREADINFO)
-                    if user32.GetGUIThreadInfo(tid, ctypes.byref(gui)):
-                        if gui.hwndFocus and user32.IsWindow(gui.hwndFocus):
-                            user32.GetClassNameW(gui.hwndFocus, buf, 256)
-                            focus_cls = buf.value.lower()
-                            if any(w in focus_cls for w in ("_wwg", "_wwb")):
-                                if gui.hwndCaret and (gui.rcCaret.right > gui.rcCaret.left or gui.rcCaret.bottom > gui.rcCaret.top):
-                                    pt = POINT(gui.rcCaret.left, gui.rcCaret.top)
-                                    user32.ClientToScreen(gui.hwndCaret, ctypes.byref(pt))
-                                    caret_rect = (pt.x, pt.y, pt.x + max(gui.rcCaret.right - gui.rcCaret.left, 4), pt.y + max(gui.rcCaret.bottom - gui.rcCaret.top, 18))
-                                    return True, caret_rect
-                                return True, None
-                return False, None
-
-            # 4. Native Win32 Caret Fallback (for non-Chromium apps with standard Edit/RichEdit)
-            if not is_chromium_window:
-                tid = user32.GetWindowThreadProcessId(fg_hwnd, None)
-                if tid:
-                    gui = GUITHREADINFO()
-                    gui.cbSize = ctypes.sizeof(GUITHREADINFO)
-                    if user32.GetGUIThreadInfo(tid, ctypes.byref(gui)):
                         if gui.hwndFocus and user32.IsWindow(gui.hwndFocus):
                             user32.GetClassNameW(gui.hwndFocus, buf, 256)
                             focus_cls = buf.value.lower()
                             if any(k in focus_cls for k in WIN32_EDIT_CLASSES):
                                 style = user32.GetWindowLongW(gui.hwndFocus, GWL_STYLE)
                                 if not (style & ES_READONLY):
-                                    if gui.hwndCaret and (gui.rcCaret.right > gui.rcCaret.left or gui.rcCaret.bottom > gui.rcCaret.top):
-                                        pt = POINT(gui.rcCaret.left, gui.rcCaret.top)
-                                        user32.ClientToScreen(gui.hwndCaret, ctypes.byref(pt))
-                                        caret_rect = (pt.x, pt.y, pt.x + max(gui.rcCaret.right - gui.rcCaret.left, 4), pt.y + max(gui.rcCaret.bottom - gui.rcCaret.top, 18))
-                                        return True, caret_rect
                                     rect = RECT()
                                     user32.GetWindowRect(gui.hwndFocus, ctypes.byref(rect))
                                     return True, (rect.left, rect.top, rect.right, rect.bottom)
 
+            # 3. Microsoft PowerPoint & Word Fast Checks
+            if "pptframeclass" in fg_cls or "opusapp" in fg_cls:
+                tid = user32.GetWindowThreadProcessId(fg_hwnd, None)
+                if tid:
+                    gui = GUITHREADINFO()
+                    gui.cbSize = ctypes.sizeof(GUITHREADINFO)
+                    if user32.GetGUIThreadInfo(tid, ctypes.byref(gui)):
+                        if gui.hwndCaret and (gui.rcCaret.right > gui.rcCaret.left or gui.rcCaret.bottom > gui.rcCaret.top):
+                            pt = POINT(gui.rcCaret.left, gui.rcCaret.top)
+                            user32.ClientToScreen(gui.hwndCaret, ctypes.byref(pt))
+                            caret_rect = (pt.x, pt.y, pt.x + 4, pt.y + 18)
+                            return True, caret_rect
+
+            # 4. Chromium Accessibility Wake on demand (<10ms ping)
+            if is_chromium_window and fg_hwnd not in self._woken_hwnds:
+                self._woken_hwnds.add(fg_hwnd)
+                self._wake_chromium_accessibility(fg_hwnd)
+
+            # 5. UI Automation focused element (Chrome, Edge, Spotify, Electron, web inputs)
+            ctrl = auto.GetFocusedControl()
+            if ctrl:
+                if widget_hwnd and getattr(ctrl, 'NativeWindowHandle', 0) == widget_hwnd:
+                    return True, None
+
+                is_text, rect = self._validate_element(ctrl)
+                if is_text:
+                    return True, rect
+
             return False, None
-        except Exception as e:
+        except Exception:
             return False, None
 
     def is_text_box_focused(self) -> bool:

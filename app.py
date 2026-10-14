@@ -95,22 +95,22 @@ class WhisperFlowApp:
         # Continuous foreground window handle tracker for targeting pastes
         self.last_foreground_hwnd = None
 
-        # Manual show grace timer (20 seconds): gives clear visual feedback that Whisper Flow has opened
-        self.manual_show_until = time.time() + 20.0
+        # Manual show grace timer (2.5 seconds): brief startup visual confirmation
+        self.manual_show_until = time.time() + 2.5
 
         # GUI Widget (starts visible for launch confirmation, then gracefully docks/auto-hides)
         self.widget = FloatingWidget(self.config, self.audio_engine)
         self.widget.show_requested_from_external.connect(self.show_widget_requested)
 
-        # Single Debounced Visibility Controller (120ms debounce to prevent flicker)
+        # Fast Debounced Visibility Controller (25ms debounce for snappy response)
         self.visibility_debounce_timer = QTimer(self.widget)
         self.visibility_debounce_timer.setSingleShot(True)
         self.visibility_debounce_timer.timeout.connect(self._evaluate_visibility)
 
-        # Periodic fallback check (every 120ms) to ensure seamless tracking across apps
+        # Fast periodic fallback check (every 50ms) to ensure seamless tracking across apps
         self.periodic_focus_timer = QTimer(self.widget)
         self.periodic_focus_timer.timeout.connect(self._on_periodic_tick)
-        self.periodic_focus_timer.start(120)
+        self.periodic_focus_timer.start(50)
 
         self._setup_connections()
         self.widget.show()
@@ -135,8 +135,8 @@ class WhisperFlowApp:
         # Pre-warm Whisper Model in background so transcription is instant
         threading.Thread(target=self._prewarm_model, daemon=True).start()
 
-        # Initial visibility evaluation after window subsystem stabilizes (120ms)
-        self.visibility_debounce_timer.start(120)
+        # Initial visibility evaluation after window subsystem stabilizes (30ms)
+        self.visibility_debounce_timer.start(30)
 
     def _setup_connections(self):
         self.widget.toggle_recording_requested.connect(self.toggle_recording)
@@ -157,15 +157,17 @@ class WhisperFlowApp:
 
     @Slot()
     def _on_focus_changed(self):
-        """Debounce visibility change by 120ms upon focus change event."""
+        """Instant visibility evaluation upon focus change event."""
+        self.manual_show_until = 0
         if hasattr(self, 'visibility_debounce_timer'):
-            self.visibility_debounce_timer.start(120)
+            self.visibility_debounce_timer.start(20)
 
     @Slot(int, int)
     def _on_mouse_clicked(self, x, y):
-        """Debounce visibility change by 120ms upon global mouse release."""
+        """Instant visibility evaluation upon global mouse click."""
+        self.manual_show_until = 0
         if hasattr(self, 'visibility_debounce_timer'):
-            self.visibility_debounce_timer.start(120)
+            self.visibility_debounce_timer.start(20)
 
     def _on_periodic_tick(self):
         """Periodic safety tick to guarantee state consistency even if events drop."""
@@ -230,13 +232,12 @@ class WhisperFlowApp:
                 from pynput import mouse
 
                 def on_click(x, y, button, pressed):
-                    if not pressed:  # On mouse release
-                        # If click was on our widget, ignore so widget buttons aren't disturbed
-                        if self.widget and self.widget.isVisible():
-                            geom = self.widget.geometry()
-                            if geom.contains(int(x), int(y)):
-                                return
-                        self.signals.mouse_clicked.emit(int(x), int(y))
+                    # If click was on our widget, ignore so widget buttons aren't disturbed
+                    if self.widget and self.widget.isVisible():
+                        geom = self.widget.geometry()
+                        if geom.contains(int(x), int(y)):
+                            return
+                    self.signals.mouse_clicked.emit(int(x), int(y))
 
                 with mouse.Listener(on_click=on_click) as listener:
                     listener.join()
@@ -336,7 +337,7 @@ class WhisperFlowApp:
 
     def manual_show_widget(self):
         """Explicitly shows and raises the widget upon manual user request."""
-        self.manual_show_until = time.time() + 20.0
+        self.manual_show_until = time.time() + 3.0
         self.widget.show()
         self.widget.raise_()
         self.widget.activateWindow()
@@ -512,9 +513,9 @@ class WhisperFlowApp:
     def show_widget_requested(self):
         """
         Invoked when another instance launch is attempted (e.g. user double-clicked Desktop icon).
-        Explicitly shows and brings the widget to front for 20 seconds.
+        Explicitly shows and brings the widget to front for 3 seconds.
         """
-        self.manual_show_until = time.time() + 20.0
+        self.manual_show_until = time.time() + 3.0
         self.widget.show()
         self.widget.raise_()
         self.widget.activateWindow()
