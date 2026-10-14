@@ -30,6 +30,7 @@ ENV/
 
 # Local runtime configuration
 config.json
+voice_profile.json
 
 # Scratch files
 scratch/

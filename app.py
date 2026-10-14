@@ -21,6 +21,9 @@ from ui.floating_widget import (
     STATE_TRANSCRIBING, STATE_PASTED
 )
 from ui.settings_dialog import SettingsDialog
+from ui.voice_training_dialog import VoiceTrainingDialog
+from voice_profile import VoiceProfileManager
+from style_engine import StyleEngine
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
@@ -51,6 +54,9 @@ class WhisperFlowApp:
             model_name=self.config.get("model_name", "base.en")
         )
         self.paster = Paster()
+        self.voice_profile = VoiceProfileManager.get_instance()
+        self.style_engine = StyleEngine.get_instance()
+        self.style_engine.prewarm()
 
         # Continuous foreground window handle tracker for targeting pastes
         self.last_foreground_hwnd = None
@@ -255,6 +261,35 @@ class WhisperFlowApp:
 
         self.auto_show_action.triggered.connect(_on_toggle_auto_show)
 
+        # Speech Style Submenu
+        style_menu = tray_menu.addMenu("Speech Style")
+        self.style_action_group = {}
+        styles = [
+            ("Professional / Executive", "professional"),
+            ("Casual Chat", "casual"),
+            ("Developer / Code", "code"),
+            ("Raw Cleaned", "raw"),
+            ("Custom Persona", "custom")
+        ]
+        cur_style = self.voice_profile.get_active_style()
+        for title, key in styles:
+            act = style_menu.addAction(title)
+            act.setCheckable(True)
+            act.setChecked(key == cur_style)
+            def _make_handler(s_key=key):
+                def _handler():
+                    self.voice_profile.set_active_style(s_key)
+                    for k, a in self.style_action_group.items():
+                        a.setChecked(k == s_key)
+                return _handler
+            act.triggered.connect(_make_handler(key))
+            self.style_action_group[key] = act
+
+        wizard_action = tray_menu.addAction("Voice Calibration Wizard...")
+        wizard_action.triggered.connect(self._launch_calibration_wizard)
+
+        tray_menu.addSeparator()
+
         settings_action = tray_menu.addAction("Preferences...")
         settings_action.triggered.connect(self.open_settings)
 
@@ -356,12 +391,37 @@ class WhisperFlowApp:
 
         def transcribe_worker():
             try:
+                # 1. Custom Vocabulary Biasing for Whisper Token Decoder
+                initial_prompt = self.voice_profile.get_initial_prompt()
+
                 raw_text = self.whisper_engine.transcribe(
                     audio_data, 
+                    initial_prompt=initial_prompt,
                     remove_trailing_stop=False
                 )
-                cleaned_text = clean_speech_text(raw_text)
-                self.signals.transcription_done.emit(cleaned_text)
+
+                # 2. Phonetic / Custom Dictionary Replacements
+                replaced_text = self.voice_profile.apply_replacements(raw_text)
+
+                # 3. Determine active target application for App-Aware Styling
+                win_title = ""
+                win_class = ""
+                if self.last_foreground_hwnd and user32.IsWindow(self.last_foreground_hwnd):
+                    buf = ctypes.create_unicode_buffer(512)
+                    user32.GetWindowTextW(self.last_foreground_hwnd, buf, 512)
+                    win_title = buf.value
+                    user32.GetClassNameW(self.last_foreground_hwnd, buf, 512)
+                    win_class = buf.value
+
+                effective_style = self.voice_profile.get_effective_style(win_title, win_class)
+
+                # 4. Ollama / Stylist Transformation
+                styled_text = self.style_engine.transform_text(
+                    replaced_text,
+                    target_style=effective_style
+                )
+
+                self.signals.transcription_done.emit(styled_text)
             except Exception as e:
                 print(f"Error during transcription: {e}")
                 self.signals.transcription_done.emit("")
@@ -397,7 +457,7 @@ class WhisperFlowApp:
         threading.Thread(target=self._prewarm_model, daemon=True).start()
 
     def open_settings(self):
-        dlg = SettingsDialog(self.config, self.audio_engine, self.widget)
+        dlg = SettingsDialog(self.config, self.audio_engine, self.whisper_engine, self.widget)
         if dlg.exec():
             save_config(self.config)
             self.audio_engine.device_index = self.config.get("input_device_index")
@@ -408,6 +468,10 @@ class WhisperFlowApp:
             if self.whisper_engine.model_name != self.config.get("model_name"):
                 self.whisper_engine = WhisperEngine.get_instance(self.config.get("model_name"))
                 threading.Thread(target=self._prewarm_model, daemon=True).start()
+
+    def _launch_calibration_wizard(self):
+        wiz = VoiceTrainingDialog(self.audio_engine, self.whisper_engine, self.widget)
+        wiz.exec()
 
     def show_widget_requested(self):
         """

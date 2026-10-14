@@ -104,7 +104,7 @@ class WhisperEngine:
             self.is_loading = False
             return self.model
 
-    def transcribe(self, audio_data, sample_rate=16000, remove_trailing_stop=False):
+    def transcribe(self, audio_data, sample_rate=16000, initial_prompt=None, remove_trailing_stop=False):
         """
         Transcribes audio_data (1D numpy float32 array).
         Returns the formatted transcribed text.
@@ -124,6 +124,7 @@ class WhisperEngine:
 
         segments, info = self.model.transcribe(
             audio_data,
+            initial_prompt=initial_prompt,
             beam_size=1,
             best_of=1,
             temperature=0.0,

@@ -272,6 +272,25 @@ class FloatingWidget(QWidget):
                 act.setIconText("✓")
             act.triggered.connect(lambda checked=False, model=m: self.model_changed.emit(model))
 
+        # Speech Style submenu
+        from voice_profile import VoiceProfileManager
+        profile_mgr = VoiceProfileManager.get_instance()
+        cur_style = profile_mgr.get_active_style()
+        style_menu = menu.addMenu(f"Style: {cur_style.capitalize()}")
+        style_menu.setStyleSheet(menu.styleSheet())
+        styles = [
+            ("Professional / Executive", "professional"),
+            ("Casual Chat", "casual"),
+            ("Developer / Code", "code"),
+            ("Raw Cleaned", "raw"),
+            ("Custom Persona", "custom")
+        ]
+        for label, key in styles:
+            act = style_menu.addAction(label)
+            if key == cur_style:
+                act.setIconText("✓")
+            act.triggered.connect(lambda checked=False, s=key: profile_mgr.set_active_style(s))
+
         menu.addSeparator()
 
         settings_action = menu.addAction("⚙ Preferences & Microphone...")
