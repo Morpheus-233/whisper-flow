@@ -2,8 +2,42 @@ import sys
 import os
 import threading
 import time
+import tempfile
 import ctypes
 from ctypes import wintypes
+
+LOG_FILE = os.path.join(tempfile.gettempdir(), "whisper_flow_startup.log")
+
+def log_debug(msg):
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+    except Exception:
+        pass
+
+class SafeStream:
+    def write(self, s):
+        if s and s.strip():
+            log_debug(s.strip())
+    def flush(self):
+        pass
+
+if sys.stdout is None:
+    sys.stdout = SafeStream()
+if sys.stderr is None:
+    sys.stderr = SafeStream()
+
+def exception_hook(exctype, value, tb):
+    import traceback
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n--- UNCAUGHT EXCEPTION: {exctype.__name__}: {value} ---\n")
+            traceback.print_tb(tb, file=f)
+    except Exception:
+        pass
+    sys.__excepthook__(exctype, value, tb)
+
+sys.excepthook = exception_hook
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PySide6.QtCore import Qt, QObject, Signal, Slot, QTimer, QPoint
@@ -61,8 +95,8 @@ class WhisperFlowApp:
         # Continuous foreground window handle tracker for targeting pastes
         self.last_foreground_hwnd = None
 
-        # Manual show grace timer (8 seconds): gives clear visual feedback that Whisper Flow has opened
-        self.manual_show_until = time.time() + 8.0
+        # Manual show grace timer (20 seconds): gives clear visual feedback that Whisper Flow has opened
+        self.manual_show_until = time.time() + 20.0
 
         # GUI Widget (starts visible for launch confirmation, then gracefully docks/auto-hides)
         self.widget = FloatingWidget(self.config, self.audio_engine)
@@ -302,7 +336,7 @@ class WhisperFlowApp:
 
     def manual_show_widget(self):
         """Explicitly shows and raises the widget upon manual user request."""
-        self.manual_show_until = time.time() + 8.0
+        self.manual_show_until = time.time() + 20.0
         self.widget.show()
         self.widget.raise_()
         self.widget.activateWindow()
@@ -313,7 +347,7 @@ class WhisperFlowApp:
             if not self.widget.isVisible():
                 self.manual_show_widget()
             else:
-                self.toggle_recording()
+                self.widget.hide()
 
     def _start_hotkey_listener(self):
         """Global background keyboard hotkey listener for Ctrl+Shift+Space and Ctrl+Alt+Space."""
@@ -357,8 +391,10 @@ class WhisperFlowApp:
         if self.audio_engine.is_recording:
             self.stop_recording()
         else:
+            self.manual_show_until = time.time() + 30.0
             if not self.widget.isVisible():
                 self.widget.show()
+                self.widget.raise_()
             self.start_recording()
 
     def start_recording(self):
@@ -476,9 +512,9 @@ class WhisperFlowApp:
     def show_widget_requested(self):
         """
         Invoked when another instance launch is attempted (e.g. user double-clicked Desktop icon).
-        Explicitly shows and brings the widget to front for 8 seconds.
+        Explicitly shows and brings the widget to front for 20 seconds.
         """
-        self.manual_show_until = time.time() + 8.0
+        self.manual_show_until = time.time() + 20.0
         self.widget.show()
         self.widget.raise_()
         self.widget.activateWindow()
@@ -502,28 +538,6 @@ class WhisperFlowApp:
         if self.audio_engine.is_recording:
             self.audio_engine.stop_recording()
         QApplication.quit()
-
-import tempfile
-LOG_FILE = os.path.join(tempfile.gettempdir(), "whisper_flow_startup.log")
-
-def log_debug(msg):
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
-    except Exception:
-        pass
-
-def exception_hook(exctype, value, tb):
-    import traceback
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"\n--- UNCAUGHT EXCEPTION: {exctype.__name__}: {value} ---\n")
-            traceback.print_tb(tb, file=f)
-    except Exception:
-        pass
-    sys.__excepthook__(exctype, value, tb)
-
-sys.excepthook = exception_hook
 
 def main():
     log_debug("=== main() started ===")

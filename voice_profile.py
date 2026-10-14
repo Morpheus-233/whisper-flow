@@ -23,10 +23,10 @@ DEFAULT_PROFILE = {
         "whisper flow": "Whisper Flow",
         "better whisper": "BetterWispr"
     },
-    "active_style": "professional",  # raw, professional, casual, code, custom
-    "app_aware_enabled": True,
+    "active_style": "raw",  # raw, professional, casual, code, custom
+    "app_aware_enabled": False,
     "custom_persona_prompt": "You are my personal speech writing assistant. Keep sentences clear, concise, and punchy without altering my core meaning.",
-    "ollama_enabled": True,
+    "ollama_enabled": False,
     "ollama_model": "qwen3.5:9b-q4_K_M",
     "acoustic_settings": {
         "mic_gain_multiplier": 1.0,

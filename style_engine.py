@@ -46,7 +46,7 @@ class StyleEngine:
         def _worker():
             try:
                 profile = self.profile_mgr.profile
-                if not profile.get("ollama_enabled", True):
+                if not profile.get("ollama_enabled", False):
                     return
                 model_name = profile.get("ollama_model", "qwen3.5:9b-q4_K_M")
                 payload = {
@@ -60,11 +60,11 @@ class StyleEngine:
                     headers={"Content-Type": "application/json"},
                     method="POST"
                 )
-                with urllib.request.urlopen(req, timeout=20.0) as resp:
+                with urllib.request.urlopen(req, timeout=10.0) as resp:
                     resp.read()
                 print(f"[StyleEngine] Ollama model '{model_name}' is warm in VRAM!")
             except Exception as e:
-                print(f"[StyleEngine] Pre-warm notice: {e}")
+                pass
 
         import threading
         threading.Thread(target=_worker, daemon=True).start()
@@ -95,13 +95,13 @@ class StyleEngine:
         # Step 2: Determine style
         style = target_style or self.profile_mgr.get_active_style()
 
-        # If style is 'raw', return immediately
-        if style == "raw":
+        # If style is 'raw' or empty, return immediately
+        if not style or style == "raw":
             return cleaned_base
 
         # Check if Ollama is enabled in profile
         profile = self.profile_mgr.profile
-        if not profile.get("ollama_enabled", True):
+        if not profile.get("ollama_enabled", False):
             return cleaned_base
 
         model_name = profile.get("ollama_model", "qwen3.5:9b-q4_K_M")
@@ -141,8 +141,8 @@ class StyleEngine:
                 method="POST"
             )
 
-            # 3.0s timeout to guarantee responsiveness without dropping styled output
-            with urllib.request.urlopen(req, timeout=3.0) as resp:
+            # 1.5s timeout to guarantee instant responsiveness without freezing dictation
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
                 resp_data = json.loads(resp.read().decode("utf-8"))
                 output = resp_data.get("response", "").strip()
 
@@ -157,7 +157,7 @@ class StyleEngine:
 
                 if output:
                     return output
-        except Exception as e:
-            print(f"[StyleEngine] Ollama styling notice ({e}), using instant local clean.")
+        except Exception:
+            pass
 
         return cleaned_base

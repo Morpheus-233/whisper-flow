@@ -166,12 +166,23 @@ class FocusDetector:
 
     def _wake_chromium_accessibility(self, hwnd: int):
         """
-        Enables Chromium accessibility on demand for Spotify, Chrome, Slack, Discord, Steam, etc.
+        Enables Chromium accessibility on demand for Chrome, Edge, Spotify, Slack, Discord, Steam, etc.
         Sending WM_GETOBJECT with OBJID_CLIENT causes Chromium to activate its accessibility tree.
         """
         try:
             res = wintypes.DWORD()
             user32.SendMessageTimeoutW(hwnd, WM_GETOBJECT, 0, OBJID_CLIENT, 2, 80, ctypes.byref(res))
+
+            def enum_child(child_hwnd, lparam):
+                buf = (ctypes.c_wchar * 128)()
+                user32.GetClassNameW(child_hwnd, buf, 128)
+                c_name = buf.value.lower()
+                if "render" in c_name or "widget" in c_name:
+                    user32.SendMessageTimeoutW(child_hwnd, WM_GETOBJECT, 0, OBJID_CLIENT, 2, 80, ctypes.byref(res))
+                return True
+
+            EnumChildProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+            user32.EnumChildWindows(hwnd, EnumChildProc(enum_child), 0)
         except Exception:
             pass
 
