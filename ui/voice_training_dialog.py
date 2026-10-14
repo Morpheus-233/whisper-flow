@@ -18,12 +18,19 @@ CALIBRATION_SENTENCES = [
 
 class VoiceTrainingDialog(QDialog):
     calibration_completed = Signal()
+    _noise_step_updated = Signal(int)
+    _noise_finished = Signal(float)
+    _speech_finished = Signal(str, int)
 
     def __init__(self, audio_engine, whisper_engine, parent=None):
         super().__init__(parent)
         self.audio_engine = audio_engine
         self.whisper_engine = whisper_engine
         self.profile_mgr = VoiceProfileManager.get_instance()
+
+        self._noise_step_updated.connect(self._on_noise_step)
+        self._noise_finished.connect(self._on_noise_finished)
+        self._speech_finished.connect(self._on_speech_finished)
 
         self.setWindowTitle("Whisper Flow - Voice Training & Calibration")
         self.setFixedSize(540, 480)
@@ -169,27 +176,31 @@ class VoiceTrainingDialog(QDialog):
         l.addLayout(btn_row)
         return page
 
+    def _on_noise_step(self, val):
+        self.noise_progress.setValue(val)
+
+    def _on_noise_finished(self, rms):
+        self.calibrated_noise = round(rms, 5)
+        self.noise_status.setText(f"Noise floor calibrated: {self.calibrated_noise} RMS (Clear)")
+        self.noise_status.setStyleSheet("color: #34d399; font-weight: bold;")
+        self.next_to_speech_btn.setEnabled(True)
+
     def _start_noise_calibration(self):
         self.start_noise_btn.setEnabled(False)
         self.noise_status.setText("Listening to room silence... please do not speak.")
         self.noise_progress.setValue(10)
 
         def sample_noise():
-            samples = []
             self.audio_engine.start_recording()
             for i in range(1, 21):
                 time.sleep(0.1)
-                self.noise_progress.setValue(i * 5)
+                self._noise_step_updated.emit(i * 5)
             audio = self.audio_engine.stop_recording()
             if len(audio) > 0:
                 rms = float(np.sqrt(np.mean(np.square(audio))))
             else:
                 rms = 0.005
-
-            self.calibrated_noise = round(rms, 5)
-            self.noise_status.setText(f"✓ Noise floor calibrated: {self.calibrated_noise} RMS (Clear)")
-            self.noise_status.setStyleSheet("color: #34d399; font-weight: bold;")
-            self.next_to_speech_btn.setEnabled(True)
+            self._noise_finished.emit(rms)
 
         threading.Thread(target=sample_noise, daemon=True).start()
 
@@ -245,11 +256,22 @@ class VoiceTrainingDialog(QDialog):
         l.addLayout(btn_row)
         return page
 
+    def _on_speech_finished(self, text, wpm):
+        self.calibrated_wpm = wpm
+        self.transcribed_preview.setText(f"Whisper heard: \"{text}\" ({self.calibrated_wpm} WPM)")
+        self.speech_rec_status.setText("Sentence recorded.")
+        self.speech_rec_status.setStyleSheet("color: #34d399; font-weight: bold;")
+        self.record_sentence_btn.setText("Record Again")
+        self.record_sentence_btn.setEnabled(True)
+        self.record_sentence_btn.setStyleSheet("")
+        self.next_sentence_btn.setEnabled(True)
+        self.transcribed_sentences.append(text)
+
     def _toggle_sentence_recording(self):
         if not self.audio_engine.is_recording:
             self.audio_engine.start_recording()
             self.sentence_start_time = time.time()
-            self.record_sentence_btn.setText("Finish Speaking ✓")
+            self.record_sentence_btn.setText("Finish Speaking")
             self.record_sentence_btn.setStyleSheet("background-color: #059669;")
             self.speech_rec_status.setText("Recording your voice...")
             self.speech_rec_status.setStyleSheet("color: #f59e0b; font-weight: bold;")
@@ -264,16 +286,8 @@ class VoiceTrainingDialog(QDialog):
                 text = self.whisper_engine.transcribe(audio, initial_prompt=prompt)
                 words_count = len(text.split())
                 wpm = int((words_count / duration) * 60)
-                self.calibrated_wpm = max(80, min(220, wpm))
-
-                self.transcribed_preview.setText(f"Whisper heard: \"{text}\" ({self.calibrated_wpm} WPM)")
-                self.speech_rec_status.setText("✓ Sentence recorded.")
-                self.speech_rec_status.setStyleSheet("color: #34d399; font-weight: bold;")
-                self.record_sentence_btn.setText("Record Again")
-                self.record_sentence_btn.setEnabled(True)
-                self.record_sentence_btn.setStyleSheet("")
-                self.next_sentence_btn.setEnabled(True)
-                self.transcribed_sentences.append(text)
+                calibrated_wpm = max(80, min(220, wpm))
+                self._speech_finished.emit(text, calibrated_wpm)
 
             threading.Thread(target=transcribe, daemon=True).start()
 

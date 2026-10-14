@@ -74,7 +74,7 @@ class StyleEngine:
         """Returns list of model names currently installed in Ollama."""
         try:
             req = urllib.request.Request(f"{OLLAMA_API_BASE}/api/tags", headers={"User-Agent": "WhisperFlow"})
-            with urllib.request.urlopen(req, timeout=1.0) as resp:
+            with urllib.request.urlopen(req, timeout=0.4) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 models = [m.get("name") for m in data.get("models", []) if m.get("name")]
                 return models

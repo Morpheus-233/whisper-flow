@@ -182,6 +182,9 @@ class WhisperFlowApp:
         - Keeps the widget at its user-specified fixed position regardless of monitor or text box.
         """
         try:
+            if getattr(self, 'is_dialog_open', False):
+                return
+
             fg = user32.GetForegroundWindow()
             widget_hwnd = int(self.widget.winId()) if self.widget else 0
             if fg and fg != widget_hwnd and user32.IsWindow(fg):
@@ -494,21 +497,29 @@ class WhisperFlowApp:
         threading.Thread(target=self._prewarm_model, daemon=True).start()
 
     def open_settings(self):
-        dlg = SettingsDialog(self.config, self.audio_engine, self.whisper_engine, self.widget)
-        if dlg.exec():
-            save_config(self.config)
-            self.audio_engine.device_index = self.config.get("input_device_index")
-            self.auto_show_on_textbox = self.config.get("auto_show_on_textbox", True)
-            if hasattr(self, 'auto_show_action'):
-                self.auto_show_action.setChecked(self.auto_show_on_textbox)
-            self.visibility_debounce_timer.start(120)
-            if self.whisper_engine.model_name != self.config.get("model_name"):
-                self.whisper_engine = WhisperEngine.get_instance(self.config.get("model_name"))
-                threading.Thread(target=self._prewarm_model, daemon=True).start()
+        self.is_dialog_open = True
+        try:
+            dlg = SettingsDialog(self.config, self.audio_engine, self.whisper_engine, parent=None)
+            if dlg.exec():
+                save_config(self.config)
+                self.audio_engine.device_index = self.config.get("input_device_index")
+                self.auto_show_on_textbox = self.config.get("auto_show_on_textbox", True)
+                if hasattr(self, 'auto_show_action'):
+                    self.auto_show_action.setChecked(self.auto_show_on_textbox)
+                self.visibility_debounce_timer.start(50)
+                if self.whisper_engine.model_name != self.config.get("model_name"):
+                    self.whisper_engine = WhisperEngine.get_instance(self.config.get("model_name"))
+                    threading.Thread(target=self._prewarm_model, daemon=True).start()
+        finally:
+            self.is_dialog_open = False
 
     def _launch_calibration_wizard(self):
-        wiz = VoiceTrainingDialog(self.audio_engine, self.whisper_engine, self.widget)
-        wiz.exec()
+        self.is_dialog_open = True
+        try:
+            wiz = VoiceTrainingDialog(self.audio_engine, self.whisper_engine, parent=None)
+            wiz.exec()
+        finally:
+            self.is_dialog_open = False
 
     def show_widget_requested(self):
         """

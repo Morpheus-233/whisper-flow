@@ -1,4 +1,5 @@
 import sys
+import os
 import ctypes
 from ctypes import wintypes
 import uiautomation as auto
@@ -202,8 +203,13 @@ class FocusDetector:
 
             widget_hwnd = self.widget_hwnd_getter() if self.widget_hwnd_getter else 0
 
-            # Ignore focus events originating from our own widget so clicking it does not hide it
-            if widget_hwnd and (fg_hwnd == widget_hwnd):
+            # 0. FAST PATH: Ignore focus events originating from our own application
+            # (floating widget, SettingsDialog, VoiceTrainingDialog, QMenu, context menus, etc.)
+            # Never run UI Automation on ourselves: doing so from the Qt UI thread
+            # causes synchronous COM RPC deadlocks resulting in 5-10s freezes and blank white boxes!
+            fg_pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(fg_hwnd, ctypes.byref(fg_pid))
+            if fg_pid.value == os.getpid():
                 return True, None
 
             # Inspect foreground window class

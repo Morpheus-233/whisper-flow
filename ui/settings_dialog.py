@@ -1,10 +1,11 @@
+import threading
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, 
     QPushButton, QGroupBox, QTabWidget, QWidget, QCheckBox,
     QLineEdit, QListWidget, QTableWidget, QTableWidgetItem,
     QTextEdit, QMessageBox, QHeaderView
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 from voice_profile import VoiceProfileManager
 from style_engine import StyleEngine
@@ -235,7 +236,7 @@ class SettingsDialog(QDialog):
         train_lbl.setStyleSheet("color: #93c5fd; font-weight: bold;")
         train_row.addWidget(train_lbl)
         
-        self.wizard_btn = QPushButton("Voice Calibration Wizard 🎙️")
+        self.wizard_btn = QPushButton("Voice Calibration Wizard")
         self.wizard_btn.setObjectName("actionBtn")
         self.wizard_btn.clicked.connect(self._launch_wizard)
         train_row.addWidget(self.wizard_btn)
@@ -283,15 +284,23 @@ class SettingsDialog(QDialog):
         model_lbl = QLabel("Ollama Model:")
         model_row.addWidget(model_lbl)
         self.ollama_model_combo = QComboBox()
-        installed_models = StyleEngine.list_installed_models()
-        if not installed_models:
-            installed_models = ["qwen3.5:9b-q4_K_M"]
         cur_ollama_model = self.profile.get("ollama_model", "qwen3.5:9b-q4_K_M")
-        for m in installed_models:
-            self.ollama_model_combo.addItem(m, m)
-        idx = self.ollama_model_combo.findData(cur_ollama_model)
-        if idx >= 0:
-            self.ollama_model_combo.setCurrentIndex(idx)
+        self.ollama_model_combo.addItem(cur_ollama_model, cur_ollama_model)
+
+        def _fetch_models():
+            models = StyleEngine.list_installed_models()
+            if models:
+                def _update_ui():
+                    self.ollama_model_combo.clear()
+                    for m in models:
+                        self.ollama_model_combo.addItem(m, m)
+                    idx = self.ollama_model_combo.findData(cur_ollama_model)
+                    if idx >= 0:
+                        self.ollama_model_combo.setCurrentIndex(idx)
+                QTimer.singleShot(0, _update_ui)
+
+        threading.Thread(target=_fetch_models, daemon=True).start()
+
         model_row.addWidget(self.ollama_model_combo)
         o_layout.addLayout(model_row)
         l.addWidget(ollama_group)
