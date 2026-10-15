@@ -326,18 +326,18 @@ class WhisperFlowApp:
             self.style_action_group[key] = act
 
         wizard_action = tray_menu.addAction("Voice Calibration Wizard...")
-        wizard_action.triggered.connect(self._launch_calibration_wizard)
+        wizard_action.triggered.connect(lambda: QTimer.singleShot(0, self._launch_calibration_wizard))
 
         studio_action = tray_menu.addAction("Web Voice Studio (100 Sentences)...")
-        studio_action.triggered.connect(self.launch_web_voice_studio)
+        studio_action.triggered.connect(lambda: QTimer.singleShot(0, self.launch_web_voice_studio))
 
         tray_menu.addSeparator()
 
         settings_action = tray_menu.addAction("Preferences...")
-        settings_action.triggered.connect(self.open_settings)
+        settings_action.triggered.connect(lambda: QTimer.singleShot(0, self.open_settings))
 
         quit_action = tray_menu.addAction("Exit Whisper Flow")
-        quit_action.triggered.connect(self.exit_app)
+        quit_action.triggered.connect(lambda: QTimer.singleShot(0, self.exit_app))
 
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.activated.connect(self._on_tray_activated)
@@ -504,51 +504,68 @@ class WhisperFlowApp:
     def open_settings(self):
         if getattr(self, 'is_dialog_open', False):
             return
-        self.is_dialog_open = True
-        try:
-            dlg = SettingsDialog(self.config, self.audio_engine, self.whisper_engine, parent=None)
-            if dlg.exec():
-                save_config(self.config)
-                self.audio_engine.device_index = self.config.get("input_device_index")
-                self.auto_show_on_textbox = self.config.get("auto_show_on_textbox", True)
-                if hasattr(self, 'auto_show_action'):
-                    self.auto_show_action.setChecked(self.auto_show_on_textbox)
-                self.visibility_debounce_timer.start(50)
-                if self.whisper_engine.model_name != self.config.get("model_name"):
-                    self.whisper_engine = WhisperEngine.get_instance(self.config.get("model_name"))
-                    threading.Thread(target=self._prewarm_model, daemon=True).start()
-        finally:
-            self.is_dialog_open = False
+
+        def _do_open():
+            if getattr(self, 'is_dialog_open', False):
+                return
+            self.is_dialog_open = True
+            try:
+                dlg = SettingsDialog(self.config, self.audio_engine, self.whisper_engine, parent=None)
+                if dlg.exec():
+                    save_config(self.config)
+                    self.audio_engine.device_index = self.config.get("input_device_index")
+                    self.auto_show_on_textbox = self.config.get("auto_show_on_textbox", True)
+                    if hasattr(self, 'auto_show_action'):
+                        self.auto_show_action.setChecked(self.auto_show_on_textbox)
+                    self.visibility_debounce_timer.start(50)
+                    if self.whisper_engine.model_name != self.config.get("model_name"):
+                        self.whisper_engine = WhisperEngine.get_instance(self.config.get("model_name"))
+                        threading.Thread(target=self._prewarm_model, daemon=True).start()
+            finally:
+                self.is_dialog_open = False
+
+        QTimer.singleShot(0, _do_open)
 
     def _launch_calibration_wizard(self):
-        self.is_dialog_open = True
-        try:
-            wiz = VoiceTrainingDialog(self.audio_engine, self.whisper_engine, parent=None)
-            wiz.exec()
-        finally:
-            self.is_dialog_open = False
+        if getattr(self, 'is_dialog_open', False):
+            return
+
+        def _do_wiz():
+            if getattr(self, 'is_dialog_open', False):
+                return
+            self.is_dialog_open = True
+            try:
+                wiz = VoiceTrainingDialog(self.audio_engine, self.whisper_engine, parent=None)
+                wiz.exec()
+            finally:
+                self.is_dialog_open = False
+
+        QTimer.singleShot(0, _do_wiz)
 
     def launch_web_voice_studio(self):
         """Launches the lightweight Web Voice Studio server if not active, and opens browser."""
-        import socket
-        import subprocess
-        import webbrowser
+        def _do_studio():
+            import socket
+            import subprocess
+            import webbrowser
 
-        is_running = False
-        try:
-            with socket.create_connection(("127.0.0.1", 8000), timeout=0.2):
-                is_running = True
-        except Exception:
             is_running = False
+            try:
+                with socket.create_connection(("127.0.0.1", 8000), timeout=0.2):
+                    is_running = True
+            except Exception:
+                is_running = False
 
-        if not is_running:
-            server_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "studio_server.py")
-            if os.path.exists(server_script):
-                python_exe = sys.executable
-                subprocess.Popen([python_exe, server_script], cwd=os.path.dirname(os.path.abspath(__file__)))
-                time.sleep(0.4)
+            if not is_running:
+                server_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "studio_server.py")
+                if os.path.exists(server_script):
+                    python_exe = sys.executable
+                    subprocess.Popen([python_exe, server_script], cwd=os.path.dirname(os.path.abspath(__file__)))
+                    time.sleep(0.4)
 
-        webbrowser.open("http://127.0.0.1:8000")
+            webbrowser.open("http://127.0.0.1:8000")
+
+        QTimer.singleShot(0, _do_studio)
 
     def show_widget_requested(self):
         """

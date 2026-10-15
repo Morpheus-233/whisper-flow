@@ -4,11 +4,13 @@ import numpy as np
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QProgressBar, QStackedWidget, QWidget, QLineEdit, QListWidget,
-    QFrame
+    QFrame, QListWidgetItem
 )
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal, QSize
 from PySide6.QtGui import QFont, QColor
 from voice_profile import VoiceProfileManager
+from ui.theme_helper import apply_dark_window_attributes
+from ui.settings_dialog import WordRowWidget
 
 CALIBRATION_SENTENCES = [
     "The quick brown fox jumps over the lazy dog.",
@@ -33,7 +35,8 @@ class VoiceTrainingDialog(QDialog):
         self._speech_finished.connect(self._on_speech_finished)
 
         self.setWindowTitle("Whisper Flow - Voice Training & Calibration")
-        self.setFixedSize(540, 480)
+        self.setFixedSize(580, 520)
+        apply_dark_window_attributes(self)
         self.setStyleSheet("""
             QDialog {
                 background-color: #0f172a;
@@ -334,21 +337,25 @@ class VoiceTrainingDialog(QDialog):
 
         add_row = QHBoxLayout()
         self.custom_word_input = QLineEdit()
-        self.custom_word_input.setPlaceholderText("e.g. your name, project name, or jargon...")
+        self.custom_word_input.setPlaceholderText("Type word or name and press Enter to add...")
+        self.custom_word_input.returnPressed.connect(self._add_word_from_input)
         add_row.addWidget(self.custom_word_input)
 
-        add_btn = QPushButton("Add Word")
+        add_btn = QPushButton("+ Add Word")
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_btn.clicked.connect(self._add_word_from_input)
         add_row.addWidget(add_btn)
         l.addLayout(add_row)
 
         self.word_list = QListWidget()
+        self.word_list.setFixedHeight(140)
         self._refresh_word_list()
         l.addWidget(self.word_list)
 
         btn_row = QHBoxLayout()
         finish_btn = QPushButton("Finish & Save Profile")
         finish_btn.setObjectName("successBtn")
+        finish_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         finish_btn.clicked.connect(self._finish_and_save)
         btn_row.addWidget(finish_btn)
         l.addLayout(btn_row)
@@ -362,10 +369,17 @@ class VoiceTrainingDialog(QDialog):
             self.custom_word_input.clear()
             self._refresh_word_list()
 
+    def _on_remove_word(self, word: str):
+        self.profile_mgr.remove_custom_word(word)
+        self._refresh_word_list()
+
     def _refresh_word_list(self):
         self.word_list.clear()
         for w in self.profile_mgr.get_custom_words():
-            self.word_list.addItem(f"• {w}")
+            item = QListWidgetItem(self.word_list)
+            item.setSizeHint(QSize(0, 36))
+            row_widget = WordRowWidget(w, on_remove_callback=self._on_remove_word)
+            self.word_list.setItemWidget(item, row_widget)
 
     def _finish_and_save(self):
         settings = {

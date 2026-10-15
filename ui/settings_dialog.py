@@ -4,13 +4,121 @@ import threading
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, 
     QPushButton, QGroupBox, QTabWidget, QWidget, QCheckBox,
-    QLineEdit, QListWidget, QTableWidget, QTableWidgetItem,
-    QTextEdit, QMessageBox, QHeaderView
+    QLineEdit, QListWidget, QListWidgetItem, QTextEdit, QMessageBox
 )
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QTimer, QSize
+from PySide6.QtGui import QFont, QColor
 from voice_profile import VoiceProfileManager
 from style_engine import StyleEngine
+from ui.theme_helper import apply_dark_window_attributes
+
+
+class WordRowWidget(QWidget):
+    """Modern interactive row for a custom vocabulary word with an instant delete button."""
+    def __init__(self, word: str, on_remove_callback, parent=None):
+        super().__init__(parent)
+        self.word = word
+        self.on_remove_callback = on_remove_callback
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 5, 8, 5)
+        layout.setSpacing(10)
+
+        # Bullet indicator + word label
+        self.lbl = QLabel(f"•  {word}")
+        self.lbl.setStyleSheet("color: #f1f5f9; font-size: 13px; font-weight: 600;")
+        layout.addWidget(self.lbl)
+        layout.addStretch()
+
+        # Delete button
+        self.del_btn = QPushButton("Remove")
+        self.del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.del_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1e293b;
+                color: #f87171;
+                border: 1px solid #475569;
+                border-radius: 4px;
+                padding: 4px 10px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #dc2626;
+                color: white;
+                border-color: #ef4444;
+            }
+        """)
+        self.del_btn.clicked.connect(lambda: self.on_remove_callback(self.word))
+        layout.addWidget(self.del_btn)
+
+
+class ReplacementRowWidget(QWidget):
+    """Modern interactive row for phonetic replacements with an instant delete button."""
+    def __init__(self, heard: str, target: str, on_remove_callback, parent=None):
+        super().__init__(parent)
+        self.heard = heard
+        self.target = target
+        self.on_remove_callback = on_remove_callback
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 5, 8, 5)
+        layout.setSpacing(10)
+
+        # Heard bubble
+        heard_lbl = QLabel(heard)
+        heard_lbl.setStyleSheet("""
+            background-color: #0f172a;
+            color: #93c5fd;
+            border: 1px solid #334155;
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-family: 'Consolas', monospace;
+        """)
+        layout.addWidget(heard_lbl)
+
+        # Arrow
+        arrow_lbl = QLabel("→")
+        arrow_lbl.setStyleSheet("color: #64748b; font-weight: bold; font-size: 14px;")
+        layout.addWidget(arrow_lbl)
+
+        # Target bubble
+        target_lbl = QLabel(target)
+        target_lbl.setStyleSheet("""
+            background-color: #0f172a;
+            color: #34d399;
+            border: 1px solid #334155;
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: bold;
+        """)
+        layout.addWidget(target_lbl)
+        layout.addStretch()
+
+        # Delete button
+        self.del_btn = QPushButton("Remove")
+        self.del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.del_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1e293b;
+                color: #f87171;
+                border: 1px solid #475569;
+                border-radius: 4px;
+                padding: 4px 10px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #dc2626;
+                color: white;
+                border-color: #ef4444;
+            }
+        """)
+        self.del_btn.clicked.connect(lambda: self.on_remove_callback(self.heard))
+        layout.addWidget(self.del_btn)
+
 
 class SettingsDialog(QDialog):
     def __init__(self, config, audio_engine, whisper_engine=None, parent=None):
@@ -22,12 +130,16 @@ class SettingsDialog(QDialog):
         self.profile = self.profile_mgr.profile
 
         self.setWindowTitle("Whisper Flow - Preferences")
-        self.setFixedSize(520, 560)
+        self.setFixedSize(620, 680)
+
+        # Eliminate white flash and enable native dark title bar immediately
+        apply_dark_window_attributes(self)
+
         self.setStyleSheet("""
             QDialog {
                 background-color: #0f172a;
                 color: #f8fafc;
-                font-family: 'Segoe UI', sans-serif;
+                font-family: 'Segoe UI', -apple-system, sans-serif;
             }
             QLabel {
                 color: #cbd5e1;
@@ -37,14 +149,14 @@ class SettingsDialog(QDialog):
                 border: 1px solid rgba(255, 255, 255, 0.12);
                 border-radius: 8px;
                 background-color: #111827;
-                padding: 12px;
+                padding: 14px;
             }
             QTabBar::tab {
                 background: #1e293b;
                 color: #94a3b8;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
-                padding: 8px 18px;
+                padding: 9px 20px;
                 margin-right: 4px;
                 font-weight: bold;
                 font-size: 12px;
@@ -57,7 +169,7 @@ class SettingsDialog(QDialog):
                 border: 1px solid rgba(255, 255, 255, 0.12);
                 border-radius: 8px;
                 margin-top: 14px;
-                padding-top: 12px;
+                padding-top: 14px;
                 font-weight: bold;
                 color: #93c5fd;
             }
@@ -71,7 +183,7 @@ class SettingsDialog(QDialog):
                 color: #f8fafc;
                 border: 1px solid #334155;
                 border-radius: 6px;
-                padding: 6px 12px;
+                padding: 7px 12px;
                 font-size: 13px;
             }
             QComboBox::drop-down {
@@ -96,12 +208,14 @@ class SettingsDialog(QDialog):
             }
             QPushButton#secondaryBtn {
                 background-color: #334155;
+                color: #e2e8f0;
             }
             QPushButton#secondaryBtn:hover {
                 background-color: #475569;
             }
             QPushButton#actionBtn {
                 background-color: #4f46e5;
+                color: white;
             }
             QPushButton#actionBtn:hover {
                 background-color: #4338ca;
@@ -111,21 +225,39 @@ class SettingsDialog(QDialog):
                 color: #f8fafc;
                 border: 1px solid #334155;
                 border-radius: 6px;
-                padding: 6px 10px;
+                padding: 7px 10px;
                 font-size: 13px;
             }
-            QListWidget, QTableWidget {
-                background-color: #1e293b;
+            QLineEdit:focus, QTextEdit:focus {
+                border-color: #3b82f6;
+            }
+            QListWidget {
+                background-color: #0b0f19;
                 color: #f8fafc;
                 border: 1px solid #334155;
                 border-radius: 6px;
-            }
-            QTableWidget QHeaderView::section {
-                background-color: #0f172a;
-                color: #93c5fd;
                 padding: 4px;
-                border: 1px solid #334155;
-                font-weight: bold;
+            }
+            QListWidget::item {
+                border-bottom: 1px solid #1e293b;
+                border-radius: 4px;
+            }
+            QListWidget::item:hover {
+                background-color: #161e2e;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #0f172a;
+                width: 8px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #334155;
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #475569;
             }
         """)
 
@@ -133,9 +265,9 @@ class SettingsDialog(QDialog):
         layout.setSpacing(14)
         layout.setContentsMargins(18, 18, 18, 18)
 
-        # Title
+        # Header Title
         title_label = QLabel("Whisper Flow Preferences")
-        title_label.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        title_label.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         title_label.setStyleSheet("color: #60a5fa;")
         layout.addWidget(title_label)
 
@@ -210,7 +342,7 @@ class SettingsDialog(QDialog):
         a_layout.addWidget(self.device_combo)
         l.addWidget(audio_group)
 
-        # Behavior
+        # Focus Behavior
         behavior_group = QGroupBox("Focus Behavior")
         b_layout = QVBoxLayout(behavior_group)
         self.auto_show_check = QCheckBox("Show widget only when clicking into a text box")
@@ -229,7 +361,6 @@ class SettingsDialog(QDialog):
         g_layout.addWidget(self.groq_key_input)
         l.addWidget(groq_group)
 
-        # Info
         info_label = QLabel("Global Shortcut: Ctrl + Shift + Space\nAutomatically types directly into your active text box.")
         info_label.setStyleSheet("color: #94a3b8; font-size: 12px; font-style: italic;")
         l.addWidget(info_label)
@@ -242,36 +373,48 @@ class SettingsDialog(QDialog):
         l = QVBoxLayout(tab)
         l.setSpacing(12)
 
-        # Web Voice Studio (100 Sentences) Button
-        studio_row = QHBoxLayout()
-        studio_lbl = QLabel("100-Sentence Studio (Calibrate English & Hindi / Hinglish):")
-        studio_lbl.setStyleSheet("color: #93c5fd; font-weight: bold;")
-        studio_row.addWidget(studio_lbl)
-        
-        self.studio_btn = QPushButton("Open Web Studio")
+        # Web Voice Studio (100 Sentences) Banner Card
+        studio_group = QGroupBox("Web Voice Studio (Bilingual Calibration)")
+        s_card = QVBoxLayout(studio_group)
+        studio_desc = QLabel("Read 100 curated English & Hindi/Hinglish sentences in your browser to tune recognition accuracy and add custom words with 1 click.")
+        studio_desc.setWordWrap(True)
+        studio_desc.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        s_card.addWidget(studio_desc)
+
+        s_btn_row = QHBoxLayout()
+        s_btn_row.addStretch()
+        self.studio_btn = QPushButton("Open Web Voice Studio (Port 8000)")
         self.studio_btn.setObjectName("actionBtn")
+        self.studio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.studio_btn.clicked.connect(self._launch_web_studio)
-        studio_row.addWidget(self.studio_btn)
-        l.addLayout(studio_row)
+        s_btn_row.addWidget(self.studio_btn)
+        s_card.addLayout(s_btn_row)
+        l.addWidget(studio_group)
 
-        # Voice Training Wizard Button
-        train_row = QHBoxLayout()
-        train_lbl = QLabel("Acoustic Calibration (Microphone gain & room noise floor):")
-        train_lbl.setStyleSheet("color: #93c5fd; font-weight: bold;")
-        train_row.addWidget(train_lbl)
-        
-        self.wizard_btn = QPushButton("Voice Calibration Wizard")
+        # Acoustic Calibration Wizard
+        train_group = QGroupBox("Acoustic Calibration Wizard")
+        t_card = QVBoxLayout(train_group)
+        train_desc = QLabel("Calibrate microphone gain, background room noise floor, and average speaking pace (WPM).")
+        train_desc.setWordWrap(True)
+        train_desc.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        t_card.addWidget(train_desc)
+
+        t_btn_row = QHBoxLayout()
+        t_btn_row.addStretch()
+        self.wizard_btn = QPushButton("Run Calibration Wizard")
         self.wizard_btn.setObjectName("secondaryBtn")
+        self.wizard_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.wizard_btn.clicked.connect(self._launch_wizard)
-        train_row.addWidget(self.wizard_btn)
-        l.addLayout(train_row)
+        t_btn_row.addWidget(self.wizard_btn)
+        t_card.addLayout(t_btn_row)
+        l.addWidget(train_group)
 
-        # Style Preset Group
+        # Speech Style & Formatting Preset
         style_group = QGroupBox("Speech Style & Formatting Preset")
         s_layout = QVBoxLayout(style_group)
         self.style_combo = QComboBox()
         self.style_combo.addItem("Professional / Executive (Clean grammar, polished prose)", "professional")
-        self.style_combo.addItem("Casual Chat (Conversational, messaging friendly)", "casual")
+        self.style_combo.addItem("Casual Chat (Zero punctuation, lowercase natural chat)", "casual")
         self.style_combo.addItem("Developer / Code (Code tokens, identifiers, backticks)", "code")
         self.style_combo.addItem("Raw Cleaned (Verbatim, stutter removal only)", "raw")
         self.style_combo.addItem("Custom Persona (Your custom prompt guidelines below)", "custom")
@@ -289,7 +432,7 @@ class SettingsDialog(QDialog):
         s_layout.addWidget(self.app_aware_check)
         l.addWidget(style_group)
 
-        # Ollama LLM Group
+        # Local LLM Stylist (Ollama)
         ollama_group = QGroupBox("Local LLM Stylist (Ollama)")
         o_layout = QVBoxLayout(ollama_group)
 
@@ -334,7 +477,7 @@ class SettingsDialog(QDialog):
         persona_lbl.setStyleSheet("color: #94a3b8; font-size: 12px;")
         l.addWidget(persona_lbl)
         self.persona_edit = QTextEdit()
-        self.persona_edit.setFixedHeight(70)
+        self.persona_edit.setFixedHeight(60)
         self.persona_edit.setPlainText(self.profile.get("custom_persona_prompt", ""))
         l.addWidget(self.persona_edit)
 
@@ -343,70 +486,116 @@ class SettingsDialog(QDialog):
     def _create_dictionary_tab(self):
         tab = QWidget()
         l = QVBoxLayout(tab)
-        l.setSpacing(12)
+        l.setSpacing(14)
 
-        # Custom Vocabulary Words
+        # 1. Custom Vocabulary Section
         vocab_group = QGroupBox("Custom Vocabulary & Names (Primes Whisper Token Decoder)")
         v_layout = QVBoxLayout(vocab_group)
-        
+        v_layout.setSpacing(8)
+
+        # Add Row
         add_w_row = QHBoxLayout()
         self.new_word_input = QLineEdit()
-        self.new_word_input.setPlaceholderText("Enter name or technical term (e.g. Soham, OpenCode, PySide6)...")
+        self.new_word_input.setPlaceholderText("Type name or jargon (e.g. Soham, OpenCode, PySide6) and press Enter...")
+        self.new_word_input.returnPressed.connect(self._add_custom_word)
         add_w_row.addWidget(self.new_word_input)
 
-        add_w_btn = QPushButton("Add Word")
+        add_w_btn = QPushButton("+ Add Word")
+        add_w_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_w_btn.clicked.connect(self._add_custom_word)
         add_w_row.addWidget(add_w_btn)
         v_layout.addLayout(add_w_row)
 
-        self.vocab_list = QListWidget()
-        self.vocab_list.setFixedHeight(120)
-        self._refresh_vocab_list()
-        v_layout.addWidget(self.vocab_list)
+        # Search filter + count header
+        v_meta_row = QHBoxLayout()
+        self.vocab_filter_input = QLineEdit()
+        self.vocab_filter_input.setPlaceholderText("Filter words...")
+        self.vocab_filter_input.textChanged.connect(self._filter_vocab_list)
+        v_meta_row.addWidget(self.vocab_filter_input)
 
-        del_w_btn = QPushButton("Remove Selected Word")
-        del_w_btn.setObjectName("secondaryBtn")
-        del_w_btn.clicked.connect(self._remove_custom_word)
-        v_layout.addWidget(del_w_btn)
+        self.vocab_count_lbl = QLabel("0 saved")
+        self.vocab_count_lbl.setStyleSheet("color: #38bdf8; font-weight: bold; font-size: 12px;")
+        v_meta_row.addWidget(self.vocab_count_lbl)
+        v_layout.addLayout(v_meta_row)
+
+        # Custom List with 1-click delete buttons
+        self.vocab_list = QListWidget()
+        self.vocab_list.setFixedHeight(140)
+        v_layout.addWidget(self.vocab_list)
         l.addWidget(vocab_group)
 
-        # Phonetic Word Replacements
+        # 2. Phonetic Replacements Section
         rep_group = QGroupBox("Phonetic & Word Replacements (Instant Auto-Correct)")
         r_layout = QVBoxLayout(rep_group)
+        r_layout.setSpacing(8)
 
         add_r_row = QHBoxLayout()
         self.rep_heard_input = QLineEdit()
-        self.rep_heard_input.setPlaceholderText("When model hears...")
+        self.rep_heard_input.setPlaceholderText("When model hears (e.g. pie side)...")
+        self.rep_heard_input.returnPressed.connect(self._add_replacement_rule)
         add_r_row.addWidget(self.rep_heard_input)
 
+        arrow_icon = QLabel("→")
+        arrow_icon.setStyleSheet("color: #64748b; font-weight: bold; font-size: 14px;")
+        add_r_row.addWidget(arrow_icon)
+
         self.rep_target_input = QLineEdit()
-        self.rep_target_input.setPlaceholderText("Replace with...")
+        self.rep_target_input.setPlaceholderText("Replace with (e.g. PySide6)...")
+        self.rep_target_input.returnPressed.connect(self._add_replacement_rule)
         add_r_row.addWidget(self.rep_target_input)
 
-        add_r_btn = QPushButton("Add Rule")
+        add_r_btn = QPushButton("+ Add Rule")
+        add_r_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_r_btn.clicked.connect(self._add_replacement_rule)
         add_r_row.addWidget(add_r_btn)
         r_layout.addLayout(add_r_row)
 
-        self.rep_table = QTableWidget(0, 2)
-        self.rep_table.setHorizontalHeaderLabels(["When Heard", "Replace With"])
-        self.rep_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.rep_table.setFixedHeight(120)
-        self._refresh_rep_table()
-        r_layout.addWidget(self.rep_table)
+        # Search filter + count header
+        r_meta_row = QHBoxLayout()
+        self.rep_filter_input = QLineEdit()
+        self.rep_filter_input.setPlaceholderText("Filter rules...")
+        self.rep_filter_input.textChanged.connect(self._filter_rep_list)
+        r_meta_row.addWidget(self.rep_filter_input)
 
-        del_r_btn = QPushButton("Remove Selected Rule")
-        del_r_btn.setObjectName("secondaryBtn")
-        del_r_btn.clicked.connect(self._remove_replacement_rule)
-        r_layout.addWidget(del_r_btn)
+        self.rep_count_lbl = QLabel("0 rules active")
+        self.rep_count_lbl.setStyleSheet("color: #34d399; font-weight: bold; font-size: 12px;")
+        r_meta_row.addWidget(self.rep_count_lbl)
+        r_layout.addLayout(r_meta_row)
+
+        # Custom List with 1-click delete buttons
+        self.rep_list = QListWidget()
+        self.rep_list.setFixedHeight(140)
+        r_layout.addWidget(self.rep_list)
         l.addWidget(rep_group)
+
+        # Initial populate
+        self._refresh_vocab_list()
+        self._refresh_rep_list()
 
         return tab
 
     def _refresh_vocab_list(self):
+        filter_text = getattr(self, 'vocab_filter_input', None)
+        query = filter_text.text().strip().lower() if filter_text else ""
         self.vocab_list.clear()
-        for w in self.profile_mgr.get_custom_words():
-            self.vocab_list.addItem(w)
+
+        all_words = self.profile_mgr.get_custom_words()
+        visible_count = 0
+
+        for w in all_words:
+            if query and query not in w.lower():
+                continue
+            item = QListWidgetItem(self.vocab_list)
+            item.setSizeHint(QSize(0, 36))
+            row_widget = WordRowWidget(w, on_remove_callback=self._on_remove_word_clicked)
+            self.vocab_list.setItemWidget(item, row_widget)
+            visible_count += 1
+
+        if hasattr(self, 'vocab_count_lbl'):
+            self.vocab_count_lbl.setText(f"{len(all_words)} saved")
+
+    def _filter_vocab_list(self):
+        self._refresh_vocab_list()
 
     def _add_custom_word(self):
         w = self.new_word_input.text().strip()
@@ -415,18 +604,32 @@ class SettingsDialog(QDialog):
             self.new_word_input.clear()
             self._refresh_vocab_list()
 
-    def _remove_custom_word(self):
-        sel = self.vocab_list.currentItem()
-        if sel:
-            self.profile_mgr.remove_custom_word(sel.text())
-            self._refresh_vocab_list()
+    def _on_remove_word_clicked(self, word: str):
+        self.profile_mgr.remove_custom_word(word)
+        self._refresh_vocab_list()
 
-    def _refresh_rep_table(self):
+    def _refresh_rep_list(self):
+        filter_text = getattr(self, 'rep_filter_input', None)
+        query = filter_text.text().strip().lower() if filter_text else ""
+        self.rep_list.clear()
+
         reps = self.profile_mgr.get_replacements()
-        self.rep_table.setRowCount(len(reps))
-        for row, (h, t) in enumerate(reps.items()):
-            self.rep_table.setItem(row, 0, QTableWidgetItem(h))
-            self.rep_table.setItem(row, 1, QTableWidgetItem(t))
+        visible_count = 0
+
+        for h, t in reps.items():
+            if query and (query not in h.lower() and query not in t.lower()):
+                continue
+            item = QListWidgetItem(self.rep_list)
+            item.setSizeHint(QSize(0, 38))
+            row_widget = ReplacementRowWidget(h, t, on_remove_callback=self._on_remove_rep_clicked)
+            self.rep_list.setItemWidget(item, row_widget)
+            visible_count += 1
+
+        if hasattr(self, 'rep_count_lbl'):
+            self.rep_count_lbl.setText(f"{len(reps)} rules active")
+
+    def _filter_rep_list(self):
+        self._refresh_rep_list()
 
     def _add_replacement_rule(self):
         h = self.rep_heard_input.text().strip()
@@ -435,15 +638,11 @@ class SettingsDialog(QDialog):
             self.profile_mgr.add_replacement(h, t)
             self.rep_heard_input.clear()
             self.rep_target_input.clear()
-            self._refresh_rep_table()
+            self._refresh_rep_list()
 
-    def _remove_replacement_rule(self):
-        cur_row = self.rep_table.currentRow()
-        if cur_row >= 0:
-            item = self.rep_table.item(cur_row, 0)
-            if item:
-                self.profile_mgr.remove_replacement(item.text())
-                self._refresh_rep_table()
+    def _on_remove_rep_clicked(self, heard: str):
+        self.profile_mgr.remove_replacement(heard)
+        self._refresh_rep_list()
 
     def _test_ollama(self):
         models = StyleEngine.list_installed_models()
@@ -479,7 +678,7 @@ class SettingsDialog(QDialog):
         wiz = VoiceTrainingDialog(self.audio_engine, self.whisper_engine, self)
         if wiz.exec():
             self._refresh_vocab_list()
-            self._refresh_rep_table()
+            self._refresh_rep_list()
 
     def _save_and_accept(self):
         # General

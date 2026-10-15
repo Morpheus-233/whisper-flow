@@ -199,6 +199,7 @@ class FloatingWidget(QWidget):
             self._press_pos = event.globalPosition().toPoint()
             self._is_potential_drag = True
         elif event.button() == Qt.MouseButton.RightButton:
+            user32.ReleaseCapture()
             self._show_context_menu(event.globalPosition().toPoint())
 
     def mouseMoveEvent(self, event):
@@ -295,16 +296,17 @@ class FloatingWidget(QWidget):
         menu.addSeparator()
 
         studio_action = menu.addAction("Web Voice Studio (100 Sentences)...")
-        studio_action.triggered.connect(self.open_studio_requested.emit)
+        studio_action.triggered.connect(lambda: QTimer.singleShot(0, self.open_studio_requested.emit))
 
         settings_action = menu.addAction("Preferences & Microphone...")
-        settings_action.triggered.connect(self.open_settings_requested.emit)
+        settings_action.triggered.connect(lambda: QTimer.singleShot(0, self.open_settings_requested.emit))
 
         menu.addSeparator()
 
         exit_action = menu.addAction("Quit Whisper Flow")
-        exit_action.triggered.connect(self.exit_requested.emit)
+        exit_action.triggered.connect(lambda: QTimer.singleShot(0, self.exit_requested.emit))
 
+        user32.ReleaseCapture()
         menu.exec(pos)
 
     def paintEvent(self, event):
