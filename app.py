@@ -142,6 +142,7 @@ class WhisperFlowApp:
         self.widget.toggle_recording_requested.connect(self.toggle_recording)
         self.widget.cancel_recording_requested.connect(self.cancel_recording)
         self.widget.open_settings_requested.connect(self.open_settings)
+        self.widget.open_studio_requested.connect(self.launch_web_voice_studio)
         self.widget.model_changed.connect(self.change_model)
         self.widget.exit_requested.connect(self.exit_app)
 
@@ -326,6 +327,9 @@ class WhisperFlowApp:
         wizard_action = tray_menu.addAction("Voice Calibration Wizard...")
         wizard_action.triggered.connect(self._launch_calibration_wizard)
 
+        studio_action = tray_menu.addAction("Web Voice Studio (100 Sentences)...")
+        studio_action.triggered.connect(self.launch_web_voice_studio)
+
         tray_menu.addSeparator()
 
         settings_action = tray_menu.addAction("Preferences...")
@@ -387,7 +391,7 @@ class WhisperFlowApp:
         threading.Thread(target=run_hotkey, daemon=True).start()
 
     def _prewarm_model(self):
-        print("[App] Pre-warming Whisper model into GPU memory...")
+        print("[App] Pre-warming Whisper model...")
         self.whisper_engine.load_model()
         print("[App] Whisper model is warm and ready!")
 
@@ -520,6 +524,28 @@ class WhisperFlowApp:
             wiz.exec()
         finally:
             self.is_dialog_open = False
+
+    def launch_web_voice_studio(self):
+        """Launches the lightweight Web Voice Studio server if not active, and opens browser."""
+        import socket
+        import subprocess
+        import webbrowser
+
+        is_running = False
+        try:
+            with socket.create_connection(("127.0.0.1", 8000), timeout=0.2):
+                is_running = True
+        except Exception:
+            is_running = False
+
+        if not is_running:
+            server_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "studio_server.py")
+            if os.path.exists(server_script):
+                python_exe = sys.executable
+                subprocess.Popen([python_exe, server_script], cwd=os.path.dirname(os.path.abspath(__file__)))
+                time.sleep(0.4)
+
+        webbrowser.open("http://127.0.0.1:8000")
 
     def show_widget_requested(self):
         """

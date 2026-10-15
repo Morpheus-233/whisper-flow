@@ -1,0 +1,981 @@
+[
+  {
+    "id": 1,
+    "category": "english",
+    "text": "Good morning team, let us quickly align on today's priorities before the client call.",
+    "phonetic_keywords": [
+      "priorities",
+      "align",
+      "client call"
+    ]
+  },
+  {
+    "id": 2,
+    "category": "english",
+    "text": "Could you please send over the updated spreadsheet whenever you get a free moment?",
+    "phonetic_keywords": [
+      "spreadsheet",
+      "updated"
+    ]
+  },
+  {
+    "id": 3,
+    "category": "english",
+    "text": "I will be working remotely tomorrow because of a scheduled doctor appointment.",
+    "phonetic_keywords": [
+      "remotely",
+      "scheduled",
+      "appointment"
+    ]
+  },
+  {
+    "id": 4,
+    "category": "english",
+    "text": "Let us schedule a follow-up discussion for next Tuesday afternoon to review the progress.",
+    "phonetic_keywords": [
+      "follow-up",
+      "discussion",
+      "Tuesday"
+    ]
+  },
+  {
+    "id": 5,
+    "category": "english",
+    "text": "Thank you for the quick turnaround on the project documentation.",
+    "phonetic_keywords": [
+      "turnaround",
+      "documentation"
+    ]
+  },
+  {
+    "id": 6,
+    "category": "english",
+    "text": "We should grab a coffee and brainstorm ideas for the upcoming marketing campaign.",
+    "phonetic_keywords": [
+      "brainstorm",
+      "marketing campaign"
+    ]
+  },
+  {
+    "id": 7,
+    "category": "english",
+    "text": "Please make sure to submit your expense reports before the end of the week.",
+    "phonetic_keywords": [
+      "expense reports",
+      "submit"
+    ]
+  },
+  {
+    "id": 8,
+    "category": "english",
+    "text": "The presentation went exceptionally well and the stakeholders were very impressed.",
+    "phonetic_keywords": [
+      "exceptionally",
+      "stakeholders",
+      "impressed"
+    ]
+  },
+  {
+    "id": 9,
+    "category": "english",
+    "text": "Can someone share the Zoom link in the team chat so we can join immediately?",
+    "phonetic_keywords": [
+      "Zoom link",
+      "team chat",
+      "immediately"
+    ]
+  },
+  {
+    "id": 10,
+    "category": "english",
+    "text": "I have reviewed your proposal and left a few constructive comments in the shared document.",
+    "phonetic_keywords": [
+      "proposal",
+      "constructive",
+      "document"
+    ]
+  },
+  {
+    "id": 11,
+    "category": "english",
+    "text": "Let us take a five minute bio break and reconvene to finalize the action items.",
+    "phonetic_keywords": [
+      "reconvene",
+      "finalize",
+      "action items"
+    ]
+  },
+  {
+    "id": 12,
+    "category": "english",
+    "text": "Are we still on track to meet the quarterly milestone deadline?",
+    "phonetic_keywords": [
+      "quarterly",
+      "milestone",
+      "deadline"
+    ]
+  },
+  {
+    "id": 13,
+    "category": "english",
+    "text": "I appreciate your prompt assistance in resolving the customer escalation.",
+    "phonetic_keywords": [
+      "prompt assistance",
+      "escalation"
+    ]
+  },
+  {
+    "id": 14,
+    "category": "english",
+    "text": "The quarterly business review has been rescheduled to Thursday morning at ten o'clock.",
+    "phonetic_keywords": [
+      "quarterly",
+      "rescheduled",
+      "review"
+    ]
+  },
+  {
+    "id": 15,
+    "category": "english",
+    "text": "Please drop your feedback in the survey form so leadership can evaluate the results.",
+    "phonetic_keywords": [
+      "feedback",
+      "survey form",
+      "evaluate"
+    ]
+  },
+  {
+    "id": 16,
+    "category": "english",
+    "text": "I am using PySide6 and Qt to design a sleek floating widget interface.",
+    "phonetic_keywords": [
+      "PySide6",
+      "Qt",
+      "floating widget"
+    ]
+  },
+  {
+    "id": 17,
+    "category": "english",
+    "text": "We upgraded the model inference pipeline to CTranslate2 for ultra low latency execution.",
+    "phonetic_keywords": [
+      "inference pipeline",
+      "CTranslate2",
+      "latency"
+    ]
+  },
+  {
+    "id": 18,
+    "category": "english",
+    "text": "Whisper Flow provides real-time speech dictation directly to any active desktop window.",
+    "phonetic_keywords": [
+      "Whisper Flow",
+      "speech dictation",
+      "desktop"
+    ]
+  },
+  {
+    "id": 19,
+    "category": "english",
+    "text": "Please run git checkout main and pull the latest upstream commits before rebasing.",
+    "phonetic_keywords": [
+      "git checkout",
+      "upstream",
+      "rebasing"
+    ]
+  },
+  {
+    "id": 20,
+    "category": "english",
+    "text": "The Docker container failed to initialize because port 8080 was already allocated.",
+    "phonetic_keywords": [
+      "Docker container",
+      "initialize",
+      "allocated"
+    ]
+  },
+  {
+    "id": 21,
+    "category": "english",
+    "text": "We need to optimize the PostgreSQL query by adding a composite index on the user ID column.",
+    "phonetic_keywords": [
+      "PostgreSQL",
+      "composite index",
+      "query"
+    ]
+  },
+  {
+    "id": 22,
+    "category": "english",
+    "text": "The async function handles incoming WebSocket frames without blocking the main event loop.",
+    "phonetic_keywords": [
+      "async function",
+      "WebSocket",
+      "event loop"
+    ]
+  },
+  {
+    "id": 23,
+    "category": "english",
+    "text": "Check the Kubernetes deployment manifest to verify replica count and resource limits.",
+    "phonetic_keywords": [
+      "Kubernetes",
+      "manifest",
+      "replica count"
+    ]
+  },
+  {
+    "id": 24,
+    "category": "english",
+    "text": "The microservice exposes a secure REST API protected by JSON Web Token authentication.",
+    "phonetic_keywords": [
+      "microservice",
+      "REST API",
+      "JSON Web Token"
+    ]
+  },
+  {
+    "id": 25,
+    "category": "english",
+    "text": "Our CI/CD pipeline triggers automated unit tests and builds the production wheel artifact.",
+    "phonetic_keywords": [
+      "CI/CD pipeline",
+      "automated unit tests",
+      "artifact"
+    ]
+  },
+  {
+    "id": 26,
+    "category": "english",
+    "text": "BetterWispr uses voice activity detection to filter background ambient noise seamlessly.",
+    "phonetic_keywords": [
+      "BetterWispr",
+      "voice activity detection",
+      "ambient noise"
+    ]
+  },
+  {
+    "id": 27,
+    "category": "english",
+    "text": "We configured a Redis cache cluster with eviction policies to store temporary session tokens.",
+    "phonetic_keywords": [
+      "Redis cache",
+      "eviction policies",
+      "session tokens"
+    ]
+  },
+  {
+    "id": 28,
+    "category": "english",
+    "text": "Refactor the repository layer to use dependency injection and async database sessions.",
+    "phonetic_keywords": [
+      "repository layer",
+      "dependency injection",
+      "database"
+    ]
+  },
+  {
+    "id": 29,
+    "category": "english",
+    "text": "The frontend client renders responsive UI components using React hooks and Tailwind CSS.",
+    "phonetic_keywords": [
+      "frontend client",
+      "React hooks",
+      "Tailwind CSS"
+    ]
+  },
+  {
+    "id": 30,
+    "category": "english",
+    "text": "A race condition occurred in the multithreaded worker pool during concurrent task dequeuing.",
+    "phonetic_keywords": [
+      "race condition",
+      "multithreaded",
+      "dequeuing"
+    ]
+  },
+  {
+    "id": 31,
+    "category": "english",
+    "text": "Verify the cross-origin resource sharing headers in the Nginx reverse proxy configuration.",
+    "phonetic_keywords": [
+      "cross-origin",
+      "Nginx",
+      "reverse proxy"
+    ]
+  },
+  {
+    "id": 32,
+    "category": "english",
+    "text": "OpenCode editor supports fast symbol indexing and language server protocol integration.",
+    "phonetic_keywords": [
+      "OpenCode",
+      "symbol indexing",
+      "protocol"
+    ]
+  },
+  {
+    "id": 33,
+    "category": "english",
+    "text": "We migrated the monolith to asynchronous serverless lambda functions orchestrated by event queues.",
+    "phonetic_keywords": [
+      "monolith",
+      "asynchronous",
+      "serverless lambda"
+    ]
+  },
+  {
+    "id": 34,
+    "category": "english",
+    "text": "The GraphQL schema query resolvers enforce strict field level authorization checks.",
+    "phonetic_keywords": [
+      "GraphQL schema",
+      "resolvers",
+      "authorization"
+    ]
+  },
+  {
+    "id": 35,
+    "category": "english",
+    "text": "Ensure that the cryptographic hash uses SHA-256 with high iteration PBKDF2 salting.",
+    "phonetic_keywords": [
+      "cryptographic hash",
+      "SHA-256",
+      "PBKDF2"
+    ]
+  },
+  {
+    "id": 36,
+    "category": "english",
+    "text": "The sixth sick sheik's sixth sheep is sick and sluggish.",
+    "phonetic_keywords": [
+      "sixth sick sheik",
+      "sheep",
+      "sluggish"
+    ]
+  },
+  {
+    "id": 37,
+    "category": "english",
+    "text": "Peter Piper picked a peck of pickled peppers from the picturesque pasture.",
+    "phonetic_keywords": [
+      "Peter Piper",
+      "pickled peppers",
+      "picturesque"
+    ]
+  },
+  {
+    "id": 38,
+    "category": "english",
+    "text": "Floccinaucinihilipilification is the habit of estimating something as valueless.",
+    "phonetic_keywords": [
+      "Floccinaucinihilipilification",
+      "estimating",
+      "valueless"
+    ]
+  },
+  {
+    "id": 39,
+    "category": "english",
+    "text": "The pulchritudinous architecture of the ancient cathedral stunned every visitor.",
+    "phonetic_keywords": [
+      "pulchritudinous",
+      "architecture",
+      "cathedral"
+    ]
+  },
+  {
+    "id": 40,
+    "category": "english",
+    "text": "Anachronistic juxtaposition of archaic phonemes often confuses acoustic models.",
+    "phonetic_keywords": [
+      "Anachronistic",
+      "juxtaposition",
+      "phonemes",
+      "acoustic"
+    ]
+  },
+  {
+    "id": 41,
+    "category": "english",
+    "text": "She sells sea shells by the seashore while the sea surges silently.",
+    "phonetic_keywords": [
+      "sea shells",
+      "seashore",
+      "surges silently"
+    ]
+  },
+  {
+    "id": 42,
+    "category": "english",
+    "text": "Specific peripheral specifications require sophisticated synchronization mechanisms.",
+    "phonetic_keywords": [
+      "specifications",
+      "sophisticated",
+      "synchronization"
+    ]
+  },
+  {
+    "id": 43,
+    "category": "english",
+    "text": "Soham and Ankush developed a proprietary audio preprocessing neural filter.",
+    "phonetic_keywords": [
+      "Soham",
+      "Ankush",
+      "preprocessing"
+    ]
+  },
+  {
+    "id": 44,
+    "category": "english",
+    "text": "Somesh, Aayush, and Arsalan benchmarked the int8 quantized transformer weights.",
+    "phonetic_keywords": [
+      "Somesh",
+      "Aayush",
+      "Arsalan",
+      "quantized"
+    ]
+  },
+  {
+    "id": 45,
+    "category": "english",
+    "text": "Tejasvi verified that the Lua scripting runtime operates in a sandboxed thread.",
+    "phonetic_keywords": [
+      "Tejasvi",
+      "Lua scripting",
+      "sandboxed"
+    ]
+  },
+  {
+    "id": 46,
+    "category": "english",
+    "text": "The idiosyncratic acoustic reverberation in the auditorium degraded the audio transcription clarity.",
+    "phonetic_keywords": [
+      "idiosyncratic",
+      "reverberation",
+      "auditorium"
+    ]
+  },
+  {
+    "id": 47,
+    "category": "english",
+    "text": "Supercalifragilisticexpialidocious sounds delightful despite its extraordinary length.",
+    "phonetic_keywords": [
+      "Supercalifragilisticexpialidocious",
+      "delightful",
+      "extraordinary"
+    ]
+  },
+  {
+    "id": 48,
+    "category": "english",
+    "text": "A quick brown fox jumps gracefully over the lazy sleeping dachshund.",
+    "phonetic_keywords": [
+      "quick brown fox",
+      "gracefully",
+      "dachshund"
+    ]
+  },
+  {
+    "id": 49,
+    "category": "english",
+    "text": "Equivocal pronunciations of heteronyms can easily perplex probabilistic neural decoders.",
+    "phonetic_keywords": [
+      "Equivocal",
+      "heteronyms",
+      "probabilistic",
+      "decoders"
+    ]
+  },
+  {
+    "id": 50,
+    "category": "english",
+    "text": "Unprecedented computational parallelization accelerated matrix multiplications substantially.",
+    "phonetic_keywords": [
+      "parallelization",
+      "computational",
+      "multiplications"
+    ]
+  },
+  {
+    "id": 51,
+    "category": "hindi_hinglish",
+    "text": "Main thodi der mein call karta hoon.",
+    "phonetic_keywords": [
+      "thodi der",
+      "call karta hoon"
+    ]
+  },
+  {
+    "id": 52,
+    "category": "hindi_hinglish",
+    "text": "Aaj ka meeting schedule kya hai?",
+    "phonetic_keywords": [
+      "meeting schedule",
+      "aaj ka"
+    ]
+  },
+  {
+    "id": 53,
+    "category": "hindi_hinglish",
+    "text": "Chai peene chalte hain office ke cafeteria mein.",
+    "phonetic_keywords": [
+      "chai peene",
+      "cafeteria",
+      "office"
+    ]
+  },
+  {
+    "id": 54,
+    "category": "hindi_hinglish",
+    "text": "Kal subah jaldi nikalna padega station ke liye.",
+    "phonetic_keywords": [
+      "subah jaldi",
+      "station",
+      "nikalna"
+    ]
+  },
+  {
+    "id": 55,
+    "category": "hindi_hinglish",
+    "text": "Kya tum kal sham ko dinner par aa rahe ho?",
+    "phonetic_keywords": [
+      "sham ko",
+      "dinner",
+      "aa rahe ho"
+    ]
+  },
+  {
+    "id": 56,
+    "category": "hindi_hinglish",
+    "text": "Mujhe thoda time do main check karke batata hoon.",
+    "phonetic_keywords": [
+      "thoda time",
+      "check karke",
+      "batata hoon"
+    ]
+  },
+  {
+    "id": 57,
+    "category": "hindi_hinglish",
+    "text": "Aapka message mil gaya tha par main driving kar raha tha.",
+    "phonetic_keywords": [
+      "message",
+      "driving",
+      "mil gaya tha"
+    ]
+  },
+  {
+    "id": 58,
+    "category": "hindi_hinglish",
+    "text": "Weekend par koi plan banaya hai kya ghumne ka?",
+    "phonetic_keywords": [
+      "weekend",
+      "plan banaya",
+      "ghumne"
+    ]
+  },
+  {
+    "id": 59,
+    "category": "hindi_hinglish",
+    "text": "Weather aaj bohot acha hai bahar walk ke liye chalte hain.",
+    "phonetic_keywords": [
+      "weather",
+      "walk",
+      "bohot acha"
+    ]
+  },
+  {
+    "id": 60,
+    "category": "hindi_hinglish",
+    "text": "Main traffic mein fasa hua hoon thoda late ho jayega.",
+    "phonetic_keywords": [
+      "traffic",
+      "late",
+      "fasa hua"
+    ]
+  },
+  {
+    "id": 61,
+    "category": "hindi_hinglish",
+    "text": "Bhai tickets book ho gayi hain confirmed status hai.",
+    "phonetic_keywords": [
+      "tickets book",
+      "confirmed status"
+    ]
+  },
+  {
+    "id": 62,
+    "category": "hindi_hinglish",
+    "text": "Kya aapne delivery package receive kar liya hai?",
+    "phonetic_keywords": [
+      "delivery package",
+      "receive"
+    ]
+  },
+  {
+    "id": 63,
+    "category": "hindi_hinglish",
+    "text": "Lunch ke baad hum is topic par detail mein baat karenge.",
+    "phonetic_keywords": [
+      "lunch ke baad",
+      "detail",
+      "baat karenge"
+    ]
+  },
+  {
+    "id": 64,
+    "category": "hindi_hinglish",
+    "text": "Phone ka battery low ho gaya hai charger dena zara.",
+    "phonetic_keywords": [
+      "battery low",
+      "charger"
+    ]
+  },
+  {
+    "id": 65,
+    "category": "hindi_hinglish",
+    "text": "Kripya karke apna email address chat box mein drop kar dijiye.",
+    "phonetic_keywords": [
+      "email address",
+      "chat box",
+      "drop kar dijiye"
+    ]
+  },
+  {
+    "id": 66,
+    "category": "hindi_hinglish",
+    "text": "Code push kar diya hai maine github par.",
+    "phonetic_keywords": [
+      "code push",
+      "github"
+    ]
+  },
+  {
+    "id": 67,
+    "category": "hindi_hinglish",
+    "text": "Yeh feature bilkul sahi kaam kar raha hai.",
+    "phonetic_keywords": [
+      "feature",
+      "sahi kaam"
+    ]
+  },
+  {
+    "id": 68,
+    "category": "hindi_hinglish",
+    "text": "Server restart karne ke baad test karo.",
+    "phonetic_keywords": [
+      "server restart",
+      "test karo"
+    ]
+  },
+  {
+    "id": 69,
+    "category": "hindi_hinglish",
+    "text": "Pull request merge kar di hai maine staging branch mein.",
+    "phonetic_keywords": [
+      "pull request",
+      "merge",
+      "staging branch"
+    ]
+  },
+  {
+    "id": 70,
+    "category": "hindi_hinglish",
+    "text": "Database connection timeout ho gaya hai query optimize karni padegi.",
+    "phonetic_keywords": [
+      "database connection",
+      "timeout",
+      "query optimize"
+    ]
+  },
+  {
+    "id": 71,
+    "category": "hindi_hinglish",
+    "text": "Production deployment ke baad server logs check kar lena.",
+    "phonetic_keywords": [
+      "production deployment",
+      "server logs"
+    ]
+  },
+  {
+    "id": 72,
+    "category": "hindi_hinglish",
+    "text": "API response ka latency bahut high aa raha hai.",
+    "phonetic_keywords": [
+      "API response",
+      "latency",
+      "high"
+    ]
+  },
+  {
+    "id": 73,
+    "category": "hindi_hinglish",
+    "text": "Docker container crash ho gaya memory leak ki wajah se.",
+    "phonetic_keywords": [
+      "Docker container",
+      "crash",
+      "memory leak"
+    ]
+  },
+  {
+    "id": 74,
+    "category": "hindi_hinglish",
+    "text": "Cache invalidate karke browser refresh karo ek baar.",
+    "phonetic_keywords": [
+      "cache invalidate",
+      "browser refresh"
+    ]
+  },
+  {
+    "id": 75,
+    "category": "hindi_hinglish",
+    "text": "Frontend build fail ho gaya TypeScript compile errors ke saath.",
+    "phonetic_keywords": [
+      "frontend build",
+      "TypeScript",
+      "compile errors"
+    ]
+  },
+  {
+    "id": 76,
+    "category": "hindi_hinglish",
+    "text": "Microservice architecture mein event driven communication best rehta hai.",
+    "phonetic_keywords": [
+      "microservice",
+      "event driven",
+      "communication"
+    ]
+  },
+  {
+    "id": 77,
+    "category": "hindi_hinglish",
+    "text": "Merge conflicts resolve karke commit push kar diya hai.",
+    "phonetic_keywords": [
+      "merge conflicts",
+      "commit push"
+    ]
+  },
+  {
+    "id": 78,
+    "category": "hindi_hinglish",
+    "text": "Staging environment par migration script run kar do jaldi.",
+    "phonetic_keywords": [
+      "staging environment",
+      "migration script"
+    ]
+  },
+  {
+    "id": 79,
+    "category": "hindi_hinglish",
+    "text": "Kubernetes cluster mein pod restart loop mein chala gaya hai.",
+    "phonetic_keywords": [
+      "Kubernetes cluster",
+      "pod restart loop"
+    ]
+  },
+  {
+    "id": 80,
+    "category": "hindi_hinglish",
+    "text": "Redis cluster ka memory limit cross ho gaya hai keys expire karo.",
+    "phonetic_keywords": [
+      "Redis cluster",
+      "memory limit",
+      "expire"
+    ]
+  },
+  {
+    "id": 81,
+    "category": "hindi_hinglish",
+    "text": "Authentication token expire hone par refresh token request bhejni hogi.",
+    "phonetic_keywords": [
+      "authentication token",
+      "refresh token"
+    ]
+  },
+  {
+    "id": 82,
+    "category": "hindi_hinglish",
+    "text": "Background worker queue mein task safely process ho raha hai.",
+    "phonetic_keywords": [
+      "background worker",
+      "queue",
+      "process"
+    ]
+  },
+  {
+    "id": 83,
+    "category": "hindi_hinglish",
+    "text": "Localhost par application smoothly run kar rahi hai bina kisi issue ke.",
+    "phonetic_keywords": [
+      "localhost",
+      "application",
+      "smoothly"
+    ]
+  },
+  {
+    "id": 84,
+    "category": "hindi_hinglish",
+    "text": "Naya endpoint test karne ke liye Postman collection share karo.",
+    "phonetic_keywords": [
+      "endpoint",
+      "Postman collection"
+    ]
+  },
+  {
+    "id": 85,
+    "category": "hindi_hinglish",
+    "text": "PySide6 UI thread freeze ho gaya kyunki heavy task worker thread mein nahi tha.",
+    "phonetic_keywords": [
+      "PySide6",
+      "UI thread",
+      "worker thread"
+    ]
+  },
+  {
+    "id": 86,
+    "category": "hindi_hinglish",
+    "text": "Sprint planning meeting mein backlog grooming items discuss karenge.",
+    "phonetic_keywords": [
+      "sprint planning",
+      "backlog grooming"
+    ]
+  },
+  {
+    "id": 87,
+    "category": "hindi_hinglish",
+    "text": "Client ko demo dikhane se pehle edge cases thoroughly test kar lena.",
+    "phonetic_keywords": [
+      "client demo",
+      "edge cases",
+      "thoroughly"
+    ]
+  },
+  {
+    "id": 88,
+    "category": "hindi_hinglish",
+    "text": "Yeh bug production environment mein replicate nahi ho raha hai.",
+    "phonetic_keywords": [
+      "production environment",
+      "replicate",
+      "bug"
+    ]
+  },
+  {
+    "id": 89,
+    "category": "hindi_hinglish",
+    "text": "Security audit ke findings ko resolve karne ke liye patch release nikalna padega.",
+    "phonetic_keywords": [
+      "security audit",
+      "findings",
+      "patch release"
+    ]
+  },
+  {
+    "id": 90,
+    "category": "hindi_hinglish",
+    "text": "Mobile responsive design check karo tablet aur phone screens par.",
+    "phonetic_keywords": [
+      "mobile responsive",
+      "design",
+      "tablet"
+    ]
+  },
+  {
+    "id": 91,
+    "category": "hindi_hinglish",
+    "text": "Unit test coverage eighty percent se kam nahi honi chahiye.",
+    "phonetic_keywords": [
+      "unit test coverage",
+      "eighty percent"
+    ]
+  },
+  {
+    "id": 92,
+    "category": "hindi_hinglish",
+    "text": "Data backup schedule daily midnight ko configure kar diya gaya hai.",
+    "phonetic_keywords": [
+      "data backup",
+      "midnight",
+      "configure"
+    ]
+  },
+  {
+    "id": 93,
+    "category": "hindi_hinglish",
+    "text": "Dark mode theme toggle karne par contrast bilkul perfect dikhta hai.",
+    "phonetic_keywords": [
+      "dark mode theme",
+      "contrast",
+      "toggle"
+    ]
+  },
+  {
+    "id": 94,
+    "category": "hindi_hinglish",
+    "text": "Notification bell icon par click karne se real-time alerts show hote hain.",
+    "phonetic_keywords": [
+      "notification bell",
+      "real-time alerts"
+    ]
+  },
+  {
+    "id": 95,
+    "category": "hindi_hinglish",
+    "text": "Whisper Flow model fast inference de raha hai CPU int8 par.",
+    "phonetic_keywords": [
+      "Whisper Flow",
+      "inference",
+      "CPU int8"
+    ]
+  },
+  {
+    "id": 96,
+    "category": "hindi_hinglish",
+    "text": "Bhai microphone settings mein gain boost adjust karke test karo.",
+    "phonetic_keywords": [
+      "microphone settings",
+      "gain boost",
+      "adjust"
+    ]
+  },
+  {
+    "id": 97,
+    "category": "hindi_hinglish",
+    "text": "Custom dictionary mein naya word add karne se recognition accurate ho jaata hai.",
+    "phonetic_keywords": [
+      "custom dictionary",
+      "recognition accurate"
+    ]
+  },
+  {
+    "id": 98,
+    "category": "hindi_hinglish",
+    "text": "Audio waveform visualizer live voice fluctuations accurately render karta hai.",
+    "phonetic_keywords": [
+      "waveform visualizer",
+      "voice fluctuations",
+      "render"
+    ]
+  },
+  {
+    "id": 99,
+    "category": "hindi_hinglish",
+    "text": "Kal sham tak project release candidate tag karke staging par deploy karenge.",
+    "phonetic_keywords": [
+      "release candidate",
+      "staging",
+      "deploy"
+    ]
+  },
+  {
+    "id": 100,
+    "category": "hindi_hinglish",
+    "text": "Hundred calibration sentences complete hone ke baad voice profile fully tuned ho jayega.",
+    "phonetic_keywords": [
+      "calibration sentences",
+      "voice profile",
+      "tuned"
+    ]
+  }
+]

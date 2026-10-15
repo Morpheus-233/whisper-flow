@@ -2,7 +2,7 @@ import json
 import urllib.request
 import urllib.error
 import re
-from text_cleaner import clean_speech_text
+from text_cleaner import clean_speech_text, format_casual_chat
 
 OLLAMA_API_BASE = "http://127.0.0.1:11434"
 
@@ -98,6 +98,10 @@ class StyleEngine:
         # If style is 'raw' or empty, return immediately
         if not style or style == "raw":
             return cleaned_base
+
+        # Casual style: zero-GPU instant rule without invoking Ollama or adding any latency or punctuation!
+        if style == "casual":
+            return format_casual_chat(raw_text)
 
         # Check if Ollama is enabled in profile
         profile = self.profile_mgr.profile

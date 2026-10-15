@@ -5,8 +5,9 @@ CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.j
 
 DEFAULT_CONFIG = {
     "model_name": "base.en",
-    "device": "cuda",
-    "compute_type": "float16",
+    "device": "cpu",
+    "compute_type": "int8",
+    "groq_api_key": "",
     "paste_mode": "instant_paste",  # Automatically inserts text directly into the target box
     "global_hotkey": "ctrl+alt+space",
     "sound_effects": False,

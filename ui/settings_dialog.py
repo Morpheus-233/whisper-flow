@@ -1,3 +1,5 @@
+import os
+import time
 import threading
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, 
@@ -217,6 +219,16 @@ class SettingsDialog(QDialog):
         b_layout.addWidget(self.auto_show_check)
         l.addWidget(behavior_group)
 
+        # Cloud Speech Fallback (Groq API)
+        groq_group = QGroupBox("Cloud Speech Fallback (Optional Groq Whisper)")
+        g_layout = QVBoxLayout(groq_group)
+        self.groq_key_input = QLineEdit()
+        self.groq_key_input.setPlaceholderText("Enter Groq API Key (gsk_...) for 0% CPU cloud Whisper")
+        self.groq_key_input.setText(self.config.get("groq_api_key", ""))
+        self.groq_key_input.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
+        g_layout.addWidget(self.groq_key_input)
+        l.addWidget(groq_group)
+
         # Info
         info_label = QLabel("Global Shortcut: Ctrl + Shift + Space\nAutomatically types directly into your active text box.")
         info_label.setStyleSheet("color: #94a3b8; font-size: 12px; font-style: italic;")
@@ -230,14 +242,26 @@ class SettingsDialog(QDialog):
         l = QVBoxLayout(tab)
         l.setSpacing(12)
 
+        # Web Voice Studio (100 Sentences) Button
+        studio_row = QHBoxLayout()
+        studio_lbl = QLabel("100-Sentence Studio (Calibrate English & Hindi / Hinglish):")
+        studio_lbl.setStyleSheet("color: #93c5fd; font-weight: bold;")
+        studio_row.addWidget(studio_lbl)
+        
+        self.studio_btn = QPushButton("Open Web Studio")
+        self.studio_btn.setObjectName("actionBtn")
+        self.studio_btn.clicked.connect(self._launch_web_studio)
+        studio_row.addWidget(self.studio_btn)
+        l.addLayout(studio_row)
+
         # Voice Training Wizard Button
         train_row = QHBoxLayout()
-        train_lbl = QLabel("Calibrate microphone gain, noise floor, and speech cadence:")
+        train_lbl = QLabel("Acoustic Calibration (Microphone gain & room noise floor):")
         train_lbl.setStyleSheet("color: #93c5fd; font-weight: bold;")
         train_row.addWidget(train_lbl)
         
         self.wizard_btn = QPushButton("Voice Calibration Wizard")
-        self.wizard_btn.setObjectName("actionBtn")
+        self.wizard_btn.setObjectName("secondaryBtn")
         self.wizard_btn.clicked.connect(self._launch_wizard)
         train_row.addWidget(self.wizard_btn)
         l.addLayout(train_row)
@@ -428,6 +452,28 @@ class SettingsDialog(QDialog):
         else:
             QMessageBox.warning(self, "Ollama Notice", "Could not reach Ollama at http://127.0.0.1:11434.\nMake sure the Ollama application is running.")
 
+    def _launch_web_studio(self):
+        import webbrowser
+        import subprocess
+        import socket
+        import sys
+
+        is_running = False
+        try:
+            with socket.create_connection(("127.0.0.1", 8000), timeout=0.2):
+                is_running = True
+        except Exception:
+            is_running = False
+
+        if not is_running:
+            server_script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "studio_server.py")
+            if os.path.exists(server_script):
+                python_exe = sys.executable
+                subprocess.Popen([python_exe, server_script], cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                time.sleep(0.4)
+
+        webbrowser.open("http://127.0.0.1:8000")
+
     def _launch_wizard(self):
         from ui.voice_training_dialog import VoiceTrainingDialog
         wiz = VoiceTrainingDialog(self.audio_engine, self.whisper_engine, self)
@@ -440,6 +486,9 @@ class SettingsDialog(QDialog):
         self.config["model_name"] = self.model_combo.currentData()
         self.config["input_device_index"] = self.device_combo.currentData()
         self.config["auto_show_on_textbox"] = self.auto_show_check.isChecked()
+        self.config["groq_api_key"] = self.groq_key_input.text().strip()
+        if self.whisper_engine:
+            self.whisper_engine.groq_api_key = self.config["groq_api_key"]
 
         # Voice & Styles
         self.profile["active_style"] = self.style_combo.currentData()

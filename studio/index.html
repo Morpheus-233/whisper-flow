@@ -1,0 +1,1713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Voice Studio - Whisper Flow Calibration</title>
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-surface: #0f172a;
+            --bg-card: #162032;
+            --bg-card-hover: #1e293b;
+            --border-color: #334155;
+            --border-focus: #38bdf8;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-cyan: #38bdf8;
+            --accent-indigo: #6366f1;
+            --accent-violet: #a855f7;
+            --accent-green: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #ef4444;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-surface);
+            color: var(--text-primary);
+            font-family: var(--font-family);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Top Header */
+        header {
+            background-color: var(--bg-base);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 14px;
+            color: #0f172a;
+            letter-spacing: -0.5px;
+        }
+
+        .brand-text h1 {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--text-primary);
+            text-transform: uppercase;
+        }
+
+        .brand-text p {
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+        }
+
+        .header-stats {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .stat-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .stat-pill strong {
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        /* Progress Bar Strip */
+        .progress-strip-container {
+            background-color: #0b1120;
+            border-bottom: 1px solid var(--border-color);
+            padding: 10px 24px;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+
+        .progress-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .progress-metrics {
+            color: var(--accent-cyan);
+            font-family: var(--font-mono);
+            font-weight: 600;
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 6px;
+            background-color: #1e293b;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-indigo));
+            transition: width 0.4s ease;
+        }
+
+        /* Main Studio Layout */
+        main {
+            flex: 1;
+            max-width: 1100px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Filter & Navigation Bar */
+        .toolbar {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 6px;
+            background-color: #0b1322;
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .filter-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .filter-btn.active {
+            background-color: var(--bg-card);
+            color: var(--accent-cyan);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .jump-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .jump-input {
+            width: 60px;
+            background-color: #0b1322;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 6px 8px;
+            border-radius: 6px;
+            text-align: center;
+            font-family: var(--font-mono);
+            font-size: 13px;
+        }
+
+        .jump-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        .btn {
+            background-color: #1e293b;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover:not(:disabled) {
+            background-color: #2b394e;
+            border-color: #475569;
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-cyan {
+            background-color: rgba(56, 189, 248, 0.15);
+            border-color: rgba(56, 189, 248, 0.4);
+            color: var(--accent-cyan);
+        }
+
+        .btn-cyan:hover:not(:disabled) {
+            background-color: rgba(56, 189, 248, 0.25);
+            border-color: var(--accent-cyan);
+        }
+
+        /* Sentence Display Card */
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+            padding-bottom: 12px;
+        }
+
+        .sentence-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sentence-id-badge {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            background-color: rgba(56, 189, 248, 0.1);
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        .category-badge {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+
+        .cat-english {
+            background-color: rgba(56, 189, 248, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        .cat-hindi {
+            background-color: rgba(168, 85, 247, 0.1);
+            color: var(--accent-violet);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+        }
+
+        .completion-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .completed-status {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .pending-status {
+            background-color: rgba(100, 116, 139, 0.15);
+            color: var(--text-muted);
+            border: 1px solid rgba(100, 116, 139, 0.3);
+        }
+
+        /* Target Sentence Styling */
+        .target-sentence-container {
+            margin-bottom: 20px;
+        }
+
+        .target-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .target-sentence-text {
+            font-size: 24px;
+            font-weight: 600;
+            line-height: 1.4;
+            color: var(--text-primary);
+            letter-spacing: -0.2px;
+            padding: 12px 16px;
+            background-color: #0b1120;
+            border-radius: 8px;
+            border: 1px solid #1e293b;
+        }
+
+        .keywords-container {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .keywords-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .keyword-chip {
+            background-color: #1e293b;
+            color: var(--accent-cyan);
+            border: 1px solid #334155;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: var(--font-mono);
+        }
+
+        /* Audio Recording & Waveform Card */
+        .studio-console {
+            background-color: #0a101d;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        .visualizer-wrapper {
+            width: 100%;
+            height: 110px;
+            background-color: #050811;
+            border-radius: 8px;
+            border: 1px solid #1e293b;
+            overflow: hidden;
+            position: relative;
+        }
+
+        canvas#waveformCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .canvas-overlay-timer {
+            position: absolute;
+            top: 10px;
+            right: 14px;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-muted);
+            background-color: rgba(15, 23, 42, 0.8);
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #334155;
+        }
+
+        .canvas-overlay-timer.recording {
+            color: var(--accent-rose);
+            border-color: rgba(239, 68, 68, 0.4);
+            animation: pulse-border 1.5s infinite;
+        }
+
+        @keyframes pulse-border {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .recording-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .action-buttons {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .record-btn {
+            background-color: #dc2626;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+        }
+
+        .record-btn:hover {
+            background-color: #ef4444;
+            box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+        }
+
+        .record-btn.recording {
+            background-color: #1e293b;
+            color: var(--accent-rose);
+            border: 2px solid var(--accent-rose);
+            animation: pulse-rec 1.2s infinite;
+        }
+
+        @keyframes pulse-rec {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .record-dot {
+            width: 10px;
+            height: 10px;
+            background-color: currentColor;
+            border-radius: 50%;
+        }
+
+        .shortcut-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        .audio-playback-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        audio#audioPlayer {
+            height: 36px;
+            border-radius: 6px;
+        }
+
+        /* Transcription & Accuracy Diff Container */
+        .results-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-top: 4px;
+        }
+
+        .results-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .accuracy-score-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .score-circle {
+            font-size: 20px;
+            font-weight: 800;
+            font-family: var(--font-mono);
+            padding: 6px 14px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .score-high {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .score-medium {
+            background-color: rgba(245, 158, 11, 0.15);
+            color: var(--accent-amber);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .score-low {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: var(--accent-rose);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .diff-view-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+        }
+
+        .diff-panel {
+            background-color: #0c1220;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 14px 18px;
+        }
+
+        .diff-panel-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .diff-words {
+            font-size: 18px;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        /* Smart Word Highlighter Classes */
+        .word-match {
+            color: #e2e8f0;
+        }
+
+        .word-replaced {
+            background-color: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            font-weight: 600;
+            margin: 0 2px;
+        }
+
+        .word-deleted {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            text-decoration: line-through;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            margin: 0 2px;
+        }
+
+        .word-inserted {
+            background-color: rgba(168, 85, 247, 0.2);
+            color: #c084fc;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(168, 85, 247, 0.4);
+            font-weight: 600;
+            margin: 0 2px;
+        }
+
+        /* One-Click Add to Custom Dictionary Section */
+        .dictionary-actions-section {
+            background-color: #0b1322;
+            border: 1px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-top: 8px;
+        }
+
+        .dictionary-actions-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dict-chips-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .dict-action-btn {
+            background-color: #1e293b;
+            color: var(--text-primary);
+            border: 1px solid #475569;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dict-action-btn:hover:not(:disabled) {
+            background-color: #334155;
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .dict-action-btn:disabled {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
+            border-color: rgba(16, 185, 129, 0.3);
+            cursor: default;
+        }
+
+        /* Grid Drawer Modal */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-backdrop.open {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-header h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .modal-close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .sentences-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
+            gap: 8px;
+        }
+
+        .grid-cell {
+            aspect-ratio: 1;
+            background-color: #0b1120;
+            border: 1px solid #1e293b;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .grid-cell:hover {
+            border-color: var(--accent-cyan);
+            color: var(--text-primary);
+            transform: translateY(-2px);
+        }
+
+        .grid-cell.current {
+            border-color: var(--accent-cyan);
+            background-color: rgba(56, 189, 248, 0.15);
+            color: var(--accent-cyan);
+            font-weight: 700;
+        }
+
+        .grid-cell.completed {
+            border-color: rgba(16, 185, 129, 0.4);
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
+        }
+
+        .grid-subtext {
+            font-size: 9px;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 1100;
+            pointer-events: none;
+        }
+
+        .toast {
+            background-color: #1e293b;
+            border: 1px solid var(--accent-cyan);
+            color: var(--text-primary);
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.25s ease;
+            pointer-events: auto;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 768px) {
+            header {
+                padding: 10px 16px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .header-stats {
+                width: 100%;
+                justify-content: space-between;
+            }
+            main {
+                padding: 16px;
+            }
+            .target-sentence-text {
+                font-size: 19px;
+            }
+            .recording-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .action-buttons {
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="brand-container">
+            <div class="brand-logo">WF</div>
+            <div class="brand-text">
+                <h1>Whisper Flow // Web Voice Studio</h1>
+                <p>Acoustic Model Calibration & Custom Lexicon Builder</p>
+            </div>
+        </div>
+        <div class="header-stats">
+            <div class="stat-pill">
+                <span class="status-dot"></span>
+                <span>Engine: <strong>CPU int8 (base)</strong></span>
+            </div>
+            <div class="stat-pill">
+                <span>Custom Words: <strong id="customWordsCount">--</strong></span>
+            </div>
+            <div class="stat-pill">
+                <span>Phonetic Rules: <strong id="replacementsCount">--</strong></span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Calibration Progress Strip -->
+    <div class="progress-strip-container">
+        <div class="progress-header">
+            <span class="progress-label">CALIBRATION PROGRESS</span>
+            <span class="progress-metrics" id="progressMetrics">0 / 100 Completed (0%)</span>
+        </div>
+        <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <main>
+        <!-- Toolbar & Filter -->
+        <div class="toolbar">
+            <div class="filter-group">
+                <button class="filter-btn active" data-filter="all" id="filterAll">All (100)</button>
+                <button class="filter-btn" data-filter="english" id="filterEnglish">English (50)</button>
+                <button class="filter-btn" data-filter="hindi_hinglish" id="filterHindi">Hindi / Hinglish (50)</button>
+            </div>
+
+            <div class="nav-controls">
+                <div class="jump-container">
+                    <span>Jump to:</span>
+                    <input type="number" id="jumpInput" class="jump-input" min="1" max="100" placeholder="#">
+                </div>
+                <button class="btn" id="prevBtn" title="Previous Sentence (Left Arrow)">Previous</button>
+                <button class="btn btn-cyan" id="nextBtn" title="Next Sentence (Right Arrow)">Next</button>
+                <button class="btn" id="gridBtn" title="View Sentence Grid">Grid</button>
+            </div>
+        </div>
+
+        <!-- Sentence Card -->
+        <div class="card" id="sentenceCard">
+            <div class="card-header">
+                <div class="sentence-meta">
+                    <span class="sentence-id-badge" id="sentenceIdBadge">SENTENCE #1</span>
+                    <span class="category-badge cat-english" id="categoryBadge">ENGLISH</span>
+                </div>
+                <div class="sentence-meta">
+                    <span class="completion-badge pending-status" id="completionBadge">PENDING</span>
+                    <button class="btn" id="toggleCompleteBtn" style="font-size: 11px; padding: 4px 8px;">Mark Done</button>
+                </div>
+            </div>
+
+            <div class="target-sentence-container">
+                <div class="target-label">Target Sentence to Read:</div>
+                <div class="target-sentence-text" id="targetSentenceText">
+                    Loading calibration sentences...
+                </div>
+                <div class="keywords-container">
+                    <span class="keywords-label">Phonetic Keywords:</span>
+                    <div id="keywordsList" style="display: inline-flex; flex-wrap: wrap; gap: 6px;">
+                        <!-- Chips dynamically rendered -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Studio Audio Console -->
+            <div class="studio-console">
+                <div class="visualizer-wrapper">
+                    <canvas id="waveformCanvas"></canvas>
+                    <div class="canvas-overlay-timer" id="recordingTimer">00:00</div>
+                </div>
+
+                <div class="recording-controls">
+                    <div class="action-buttons">
+                        <button class="record-btn" id="recordToggleBtn">
+                            <span class="record-dot"></span>
+                            <span id="recordBtnLabel">START RECORDING</span>
+                        </button>
+                        <span class="shortcut-hint">[Spacebar to toggle]</span>
+                    </div>
+
+                    <div class="audio-playback-container">
+                        <audio id="audioPlayer" controls style="display: none;"></audio>
+                        <button class="btn" id="retranscribeBtn" style="display: none;">Re-Transcribe</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results & Accuracy Diff Section -->
+            <div class="results-container" id="resultsSection" style="display: none;">
+                <div class="results-header">
+                    <div class="accuracy-score-box">
+                        <div class="score-circle score-high" id="accuracyBadge">
+                            <span id="accuracyPercent">--</span>
+                        </div>
+                        <span style="font-size: 13px; color: var(--text-secondary);">Word Recognition Accuracy</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted);" id="transcribeLatency"></div>
+                </div>
+
+                <div class="diff-view-grid">
+                    <div class="diff-panel">
+                        <div class="diff-panel-title">Target vs Recognized Comparison:</div>
+                        <div class="diff-words" id="diffContent">
+                            <!-- Populated with color-coded tokens -->
+                        </div>
+                    </div>
+
+                    <div class="diff-panel">
+                        <div class="diff-panel-title">Whisper Raw Transcript:</div>
+                        <div class="diff-words" id="rawTranscriptText" style="color: var(--text-secondary); font-size: 16px;">
+                            <!-- Raw heard text -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- One-Click Add to Custom Dictionary Section -->
+                <div class="dictionary-actions-section" id="dictActionsSection" style="display: none;">
+                    <div class="dictionary-actions-title">
+                        <span>Acoustic Dictionary Suggestions:</span>
+                    </div>
+                    <div class="dict-chips-list" id="dictChipsList">
+                        <!-- Dynamic replacement pills -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Grid Modal -->
+    <div class="modal-backdrop" id="gridModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Sentence Navigation Grid (1 - 100)</h3>
+                <button class="modal-close-btn" id="modalCloseBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="sentences-grid" id="sentencesGrid">
+                    <!-- Populated 1 - 100 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // State variables
+        let sentences = [];
+        let currentIndex = 0;
+        let currentFilter = 'all';
+        let filteredIndices = [];
+        let completedIds = new Set(JSON.parse(localStorage.getItem('whisper_studio_completed') || '[]'));
+
+        // Audio & Visualizer state
+        let audioContext = null;
+        let analyser = null;
+        let mediaStream = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let recordingStartTime = 0;
+        let recordingTimerInterval = null;
+        let lastAudioBlob = null;
+        let animationFrameId = null;
+
+        // DOM elements
+        const sentenceIdBadge = document.getElementById('sentenceIdBadge');
+        const categoryBadge = document.getElementById('categoryBadge');
+        const completionBadge = document.getElementById('completionBadge');
+        const toggleCompleteBtn = document.getElementById('toggleCompleteBtn');
+        const targetSentenceText = document.getElementById('targetSentenceText');
+        const keywordsList = document.getElementById('keywordsList');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const jumpInput = document.getElementById('jumpInput');
+        const recordToggleBtn = document.getElementById('recordToggleBtn');
+        const recordBtnLabel = document.getElementById('recordBtnLabel');
+        const recordingTimer = document.getElementById('recordingTimer');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const retranscribeBtn = document.getElementById('retranscribeBtn');
+        const resultsSection = document.getElementById('resultsSection');
+        const accuracyBadge = document.getElementById('accuracyBadge');
+        const accuracyPercent = document.getElementById('accuracyPercent');
+        const diffContent = document.getElementById('diffContent');
+        const rawTranscriptText = document.getElementById('rawTranscriptText');
+        const dictActionsSection = document.getElementById('dictActionsSection');
+        const dictChipsList = document.getElementById('dictChipsList');
+        const progressFill = document.getElementById('progressFill');
+        const progressMetrics = document.getElementById('progressMetrics');
+        const customWordsCount = document.getElementById('customWordsCount');
+        const replacementsCount = document.getElementById('replacementsCount');
+        const canvas = document.getElementById('waveformCanvas');
+        const canvasCtx = canvas.getContext('2d');
+        const gridModal = document.getElementById('gridModal');
+        const sentencesGrid = document.getElementById('sentencesGrid');
+
+        // Setup high-DPI canvas
+        function setupCanvasDPI() {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            canvasCtx.scale(dpr, dpr);
+        }
+        window.addEventListener('resize', setupCanvasDPI);
+
+        // Fetch sentences and initial profile
+        async function init() {
+            setupCanvasDPI();
+            drawRestingWaveform();
+            await fetchProfileStats();
+            await loadSentences();
+            setupEventListeners();
+        }
+
+        async function fetchProfileStats() {
+            try {
+                const res = await fetch('/api/profile');
+                if (res.ok) {
+                    const data = await res.json();
+                    customWordsCount.textContent = data.custom_words_count || 0;
+                    replacementsCount.textContent = data.replacements_count || 0;
+                }
+            } catch (err) {
+                console.error('Failed fetching profile stats:', err);
+            }
+        }
+
+        async function loadSentences() {
+            try {
+                const res = await fetch('/api/sentences');
+                if (!res.ok) throw new Error('Failed to load sentences');
+                sentences = await res.json();
+                applyFilter('all');
+                renderCurrentSentence();
+                updateProgressBar();
+                buildGrid();
+            } catch (err) {
+                targetSentenceText.textContent = 'Error loading sentences from /api/sentences. Please ensure studio_server.py is running.';
+                showToast('Failed to load sentences from server');
+            }
+        }
+
+        function applyFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === filter);
+            });
+
+            filteredIndices = [];
+            sentences.forEach((s, idx) => {
+                if (filter === 'all' || s.category === filter) {
+                    filteredIndices.push(idx);
+                }
+            });
+
+            if (!filteredIndices.includes(currentIndex)) {
+                currentIndex = filteredIndices[0] || 0;
+            }
+            renderCurrentSentence();
+        }
+
+        function renderCurrentSentence() {
+            if (!sentences || sentences.length === 0) return;
+            const item = sentences[currentIndex];
+            if (!item) return;
+
+            sentenceIdBadge.textContent = `SENTENCE #${item.id} OF 100`;
+            jumpInput.value = item.id;
+
+            if (item.category === 'english') {
+                categoryBadge.textContent = 'ENGLISH';
+                categoryBadge.className = 'category-badge cat-english';
+            } else {
+                categoryBadge.textContent = 'HINDI / HINGLISH';
+                categoryBadge.className = 'category-badge cat-hindi';
+            }
+
+            const isDone = completedIds.has(item.id);
+            if (isDone) {
+                completionBadge.textContent = 'COMPLETED';
+                completionBadge.className = 'completion-badge completed-status';
+                toggleCompleteBtn.textContent = 'Mark Pending';
+            } else {
+                completionBadge.textContent = 'PENDING';
+                completionBadge.className = 'completion-badge pending-status';
+                toggleCompleteBtn.textContent = 'Mark Done';
+            }
+
+            targetSentenceText.textContent = item.text;
+
+            // Render keywords
+            keywordsList.innerHTML = '';
+            if (item.phonetic_keywords && item.phonetic_keywords.length > 0) {
+                item.phonetic_keywords.forEach(kw => {
+                    const chip = document.createElement('span');
+                    chip.className = 'keyword-chip';
+                    chip.textContent = kw;
+                    keywordsList.appendChild(chip);
+                });
+            } else {
+                keywordsList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">None specified</span>';
+            }
+
+            // Reset results display
+            resultsSection.style.display = 'none';
+            audioPlayer.style.display = 'none';
+            retranscribeBtn.style.display = 'none';
+            lastAudioBlob = null;
+
+            // Update navigation button states
+            const currentFilterPos = filteredIndices.indexOf(currentIndex);
+            prevBtn.disabled = currentFilterPos <= 0;
+            nextBtn.disabled = currentFilterPos >= filteredIndices.length - 1;
+
+            updateGridCurrentCell();
+        }
+
+        function updateProgressBar() {
+            const completedCount = completedIds.size;
+            const pct = Math.round((completedCount / (sentences.length || 100)) * 100);
+            progressFill.style.width = `${pct}%`;
+            progressMetrics.textContent = `${completedCount} / ${sentences.length || 100} Completed (${pct}%)`;
+        }
+
+        function toggleSentenceCompletion() {
+            const item = sentences[currentIndex];
+            if (!item) return;
+            if (completedIds.has(item.id)) {
+                completedIds.delete(item.id);
+                showToast(`Sentence #${item.id} marked as pending`);
+            } else {
+                completedIds.add(item.id);
+                showToast(`Sentence #${item.id} marked as completed!`);
+            }
+            localStorage.setItem('whisper_studio_completed', JSON.stringify(Array.from(completedIds)));
+            renderCurrentSentence();
+            updateProgressBar();
+            buildGrid();
+        }
+
+        // Sentence Navigation
+        function navigate(direction) {
+            const currentFilterPos = filteredIndices.indexOf(currentIndex);
+            const targetPos = currentFilterPos + direction;
+            if (targetPos >= 0 && targetPos < filteredIndices.length) {
+                currentIndex = filteredIndices[targetPos];
+                renderCurrentSentence();
+            }
+        }
+
+        function jumpToSentence(id) {
+            const idx = sentences.findIndex(s => s.id === id);
+            if (idx !== -1) {
+                currentIndex = idx;
+                if (!filteredIndices.includes(currentIndex)) {
+                    applyFilter('all');
+                } else {
+                    renderCurrentSentence();
+                }
+            }
+        }
+
+        // Web Audio & Recording Implementation
+        async function startRecording() {
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                }
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        noiseSuppression: false,
+                        echoCancellation: false
+                    }
+                });
+
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 1024;
+                source.connect(analyser);
+
+                // Setup MediaRecorder
+                let mimeType = 'audio/webm;codecs=opus';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'audio/webm';
+                }
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = '';
+                }
+
+                audioChunks = [];
+                mediaRecorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream);
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = async () => {
+                    lastAudioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                    audioPlayer.src = URL.createObjectURL(lastAudioBlob);
+                    audioPlayer.style.display = 'block';
+                    retranscribeBtn.style.display = 'inline-flex';
+                    await sendAudioForTranscription(lastAudioBlob);
+                };
+
+                mediaRecorder.start(100);
+                isRecording = true;
+                recordingStartTime = Date.now();
+                updateTimerDisplay();
+                recordingTimerInterval = setInterval(updateTimerDisplay, 500);
+
+                recordToggleBtn.classList.add('recording');
+                recordBtnLabel.textContent = 'STOP RECORDING';
+                recordingTimer.classList.add('recording');
+
+                drawLiveWaveform();
+            } catch (err) {
+                console.error('Error starting audio recording:', err);
+                showToast('Microphone access denied or audio error: ' + err.message);
+            }
+        }
+
+        function stopRecording() {
+            if (!isRecording) return;
+            isRecording = false;
+
+            if (recordingTimerInterval) {
+                clearInterval(recordingTimerInterval);
+                recordingTimerInterval = null;
+            }
+
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+
+            recordToggleBtn.classList.remove('recording');
+            recordBtnLabel.textContent = 'START RECORDING';
+            recordingTimer.classList.remove('recording');
+
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            drawRestingWaveform();
+        }
+
+        function toggleRecording() {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+
+        function updateTimerDisplay() {
+            const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+            const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+            const s = String(elapsed % 60).padStart(2, '0');
+            recordingTimer.textContent = `${m}:${s}`;
+        }
+
+        // Live Canvas Waveform Drawing
+        function drawLiveWaveform() {
+            if (!isRecording || !analyser) return;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteTimeDomainData(dataArray);
+
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
+            canvasCtx.clearRect(0, 0, width, height);
+
+            // Background subtle grid line
+            canvasCtx.strokeStyle = 'rgba(51, 65, 85, 0.4)';
+            canvasCtx.lineWidth = 1;
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(0, height / 2);
+            canvasCtx.lineTo(width, height / 2);
+            canvasCtx.stroke();
+
+            // Waveform path
+            canvasCtx.lineWidth = 2.5;
+            const gradient = canvasCtx.createLinearGradient(0, 0, width, 0);
+            gradient.addColorStop(0, '#38bdf8');
+            gradient.addColorStop(0.5, '#818cf8');
+            gradient.addColorStop(1, '#38bdf8');
+            canvasCtx.strokeStyle = gradient;
+            canvasCtx.shadowBlur = 8;
+            canvasCtx.shadowColor = '#38bdf8';
+
+            canvasCtx.beginPath();
+            const sliceWidth = width / bufferLength;
+            let x = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = (v * height) / 2;
+
+                if (i === 0) {
+                    canvasCtx.moveTo(x, y);
+                } else {
+                    canvasCtx.lineTo(x, y);
+                }
+                x += sliceWidth;
+            }
+
+            canvasCtx.stroke();
+            canvasCtx.shadowBlur = 0;
+
+            animationFrameId = requestAnimationFrame(drawLiveWaveform);
+        }
+
+        function drawRestingWaveform() {
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
+            canvasCtx.clearRect(0, 0, width, height);
+
+            canvasCtx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
+            canvasCtx.lineWidth = 1.5;
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(0, height / 2);
+            canvasCtx.lineTo(width, height / 2);
+            canvasCtx.stroke();
+        }
+
+        // Send Audio to Server
+        async function sendAudioForTranscription(audioBlob) {
+            const currentItem = sentences[currentIndex];
+            if (!currentItem) return;
+
+            showToast('Transcribing with Whisper (CPU int8)...');
+            resultsSection.style.display = 'block';
+            diffContent.innerHTML = '<span style="color: var(--text-muted);">Transcribing audio in background...</span>';
+            rawTranscriptText.innerHTML = '';
+            dictActionsSection.style.display = 'none';
+            accuracyPercent.textContent = '...';
+
+            const startTime = performance.now();
+
+            try {
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'record.webm');
+                formData.append('target', currentItem.text);
+                formData.append('sentence_id', currentItem.id);
+                formData.append('keywords', JSON.stringify(currentItem.phonetic_keywords || []));
+
+                const res = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Server error during transcription');
+                }
+
+                const data = await res.json();
+                const latency = Math.round(performance.now() - startTime);
+                document.getElementById('transcribeLatency').textContent = `Latency: ${latency}ms`;
+
+                renderTranscriptionResults(data, currentItem);
+            } catch (err) {
+                console.error('Transcription failure:', err);
+                diffContent.innerHTML = `<span style="color: var(--accent-rose);">Transcription error: ${err.message}</span>`;
+                showToast('Transcription failed: ' + err.message);
+            }
+        }
+
+        // Render Results & Smart Word Highlighter
+        function renderTranscriptionResults(data, currentItem) {
+            const accuracy = data.accuracy || 0;
+            accuracyPercent.textContent = `${accuracy}% MATCH`;
+
+            if (accuracy >= 85) {
+                accuracyBadge.className = 'score-circle score-high';
+                // Automatically mark completed if >= 85%
+                if (!completedIds.has(currentItem.id)) {
+                    completedIds.add(currentItem.id);
+                    localStorage.setItem('whisper_studio_completed', JSON.stringify(Array.from(completedIds)));
+                    renderCurrentSentence();
+                    updateProgressBar();
+                    buildGrid();
+                }
+            } else if (accuracy >= 65) {
+                accuracyBadge.className = 'score-circle score-medium';
+            } else {
+                accuracyBadge.className = 'score-circle score-low';
+            }
+
+            rawTranscriptText.textContent = data.transcribed || '(No speech detected)';
+
+            // Build Smart Highlighter Diff
+            diffContent.innerHTML = '';
+            if (data.diff && data.diff.length > 0) {
+                data.diff.forEach(item => {
+                    const span = document.createElement('span');
+                    if (item.type === 'equal') {
+                        span.className = 'word-match';
+                        span.textContent = item.target + ' ';
+                    } else if (item.type === 'replace') {
+                        span.className = 'word-replaced';
+                        span.title = `Heard: "${item.heard}" | Target: "${item.target}"`;
+                        span.textContent = `${item.heard} -> ${item.target} `;
+                    } else if (item.type === 'delete') {
+                        span.className = 'word-deleted';
+                        span.title = 'Missing word from target';
+                        span.textContent = item.target + ' ';
+                    } else if (item.type === 'insert') {
+                        span.className = 'word-inserted';
+                        span.title = 'Extra word in transcript';
+                        span.textContent = `+${item.heard} `;
+                    }
+                    diffContent.appendChild(span);
+                });
+            } else {
+                diffContent.textContent = data.transcribed || 'None';
+            }
+
+            // Build One-Click Add to Custom Dictionary Chips
+            dictChipsList.innerHTML = '';
+            let hasSuggestions = false;
+
+            // 1. Misheard word replacements
+            if (data.misheard_pairs && data.misheard_pairs.length > 0) {
+                data.misheard_pairs.forEach(pair => {
+                    if (!pair.heard || !pair.target) return;
+                    hasSuggestions = true;
+                    const btn = document.createElement('button');
+                    btn.className = 'dict-action-btn';
+                    btn.innerHTML = `+ Map "${pair.heard}" &rarr; "${pair.target}"`;
+                    btn.onclick = () => addPhoneticReplacement(pair.heard, pair.target, btn);
+                    dictChipsList.appendChild(btn);
+                });
+            }
+
+            // 2. Missing phonetic keywords
+            if (data.missing_keywords && data.missing_keywords.length > 0) {
+                data.missing_keywords.forEach(kw => {
+                    hasSuggestions = true;
+                    const btn = document.createElement('button');
+                    btn.className = 'dict-action-btn';
+                    btn.innerHTML = `+ Add "${kw}" to Custom Words`;
+                    btn.onclick = () => addCustomWord(kw, btn);
+                    dictChipsList.appendChild(btn);
+                });
+            }
+
+            if (hasSuggestions) {
+                dictActionsSection.style.display = 'block';
+            } else {
+                dictActionsSection.style.display = 'none';
+            }
+        }
+
+        // Add to Dictionary Actions
+        async function addPhoneticReplacement(heard, target, btnElement) {
+            try {
+                btnElement.disabled = true;
+                btnElement.textContent = 'Saving rule...';
+
+                const res = await fetch('/api/add_word', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'replacement', heard, target })
+                });
+
+                if (!res.ok) throw new Error('Failed to save replacement rule');
+                const result = await res.json();
+
+                btnElement.textContent = `Mapped: "${heard}" -> "${target}"`;
+                showToast(result.message || 'Replacement saved to voice_profile.json!');
+                await fetchProfileStats();
+            } catch (err) {
+                btnElement.disabled = false;
+                btnElement.textContent = `Error: Retry`;
+                showToast('Error saving replacement: ' + err.message);
+            }
+        }
+
+        async function addCustomWord(word, btnElement) {
+            try {
+                btnElement.disabled = true;
+                btnElement.textContent = 'Saving word...';
+
+                const res = await fetch('/api/add_word', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'custom_word', word })
+                });
+
+                if (!res.ok) throw new Error('Failed to save custom word');
+                const result = await res.json();
+
+                btnElement.textContent = `Added: "${word}"`;
+                showToast(result.message || 'Word added to voice_profile.json!');
+                await fetchProfileStats();
+            } catch (err) {
+                btnElement.disabled = false;
+                btnElement.textContent = `Error: Retry`;
+                showToast('Error saving word: ' + err.message);
+            }
+        }
+
+        // Build Sentence Grid
+        function buildGrid() {
+            sentencesGrid.innerHTML = '';
+            sentences.forEach((s, idx) => {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                if (idx === currentIndex) cell.classList.add('current');
+                if (completedIds.has(s.id)) cell.classList.add('completed');
+
+                cell.innerHTML = `<span>#${s.id}</span><span class="grid-subtext">${s.category === 'english' ? 'EN' : 'HI'}</span>`;
+                cell.onclick = () => {
+                    jumpToSentence(s.id);
+                    gridModal.classList.remove('open');
+                };
+                sentencesGrid.appendChild(cell);
+            });
+        }
+
+        function updateGridCurrentCell() {
+            const cells = sentencesGrid.querySelectorAll('.grid-cell');
+            cells.forEach((cell, idx) => {
+                cell.classList.toggle('current', idx === currentIndex);
+            });
+        }
+
+        // Toast Messages
+        function showToast(message) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            setTimeout(() => toast.classList.add('show'), 20);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Event Listeners
+        function setupEventListeners() {
+            prevBtn.onclick = () => navigate(-1);
+            nextBtn.onclick = () => navigate(1);
+
+            document.getElementById('filterAll').onclick = () => applyFilter('all');
+            document.getElementById('filterEnglish').onclick = () => applyFilter('english');
+            document.getElementById('filterHindi').onclick = () => applyFilter('hindi_hinglish');
+
+            jumpInput.onchange = (e) => {
+                const val = parseInt(e.target.value, 10);
+                if (val >= 1 && val <= 100) {
+                    jumpToSentence(val);
+                }
+            };
+
+            recordToggleBtn.onclick = toggleRecording;
+            retranscribeBtn.onclick = () => {
+                if (lastAudioBlob) sendAudioForTranscription(lastAudioBlob);
+            };
+
+            toggleCompleteBtn.onclick = toggleSentenceCompletion;
+
+            // Grid modal handlers
+            document.getElementById('gridBtn').onclick = () => {
+                buildGrid();
+                gridModal.classList.add('open');
+            };
+            document.getElementById('modalCloseBtn').onclick = () => {
+                gridModal.classList.remove('open');
+            };
+            gridModal.onclick = (e) => {
+                if (e.target === gridModal) gridModal.classList.remove('open');
+            };
+
+            // Global Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    toggleRecording();
+                } else if (e.code === 'ArrowLeft') {
+                    navigate(-1);
+                } else if (e.code === 'ArrowRight') {
+                    navigate(1);
+                } else if (e.code === 'Escape') {
+                    gridModal.classList.remove('open');
+                }
+            });
+        }
+
+        // Start initialization
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

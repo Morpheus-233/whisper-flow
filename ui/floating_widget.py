@@ -31,6 +31,7 @@ class FloatingWidget(QWidget):
     toggle_recording_requested = Signal()
     cancel_recording_requested = Signal()
     open_settings_requested = Signal()
+    open_studio_requested = Signal()
     model_changed = Signal(str)
     exit_requested = Signal()
     show_requested_from_external = Signal()
@@ -293,12 +294,15 @@ class FloatingWidget(QWidget):
 
         menu.addSeparator()
 
-        settings_action = menu.addAction("⚙ Preferences & Microphone...")
+        studio_action = menu.addAction("Web Voice Studio (100 Sentences)...")
+        studio_action.triggered.connect(self.open_studio_requested.emit)
+
+        settings_action = menu.addAction("Preferences & Microphone...")
         settings_action.triggered.connect(self.open_settings_requested.emit)
 
         menu.addSeparator()
 
-        exit_action = menu.addAction("✕ Quit Whisper Flow")
+        exit_action = menu.addAction("Quit Whisper Flow")
         exit_action.triggered.connect(self.exit_requested.emit)
 
         menu.exec(pos)
