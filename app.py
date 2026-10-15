@@ -575,6 +575,11 @@ class WhisperFlowApp:
         self.manual_show_until = time.time() + 60.0
         self.widget.show()
         self.widget.raise_()
+        try:
+            hwnd = int(self.widget.winId())
+            user32.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
         self.widget.activateWindow()
         self._evaluate_visibility()
         self.open_settings()
@@ -608,6 +613,12 @@ def main():
 
         if mutex_err == ERROR_ALREADY_EXISTS:
             log_debug("Existing instance detected via Windows mutex. Broadcasting SHOW signal and exiting cleanly.")
+            # Grant permission to existing instance to take foreground
+            try:
+                user32.AllowSetForegroundWindow(0xFFFFFFFF)
+            except Exception:
+                pass
+
             # Channel A: Native Win32 broadcast message (always delivered to top-level windows)
             user32.PostMessageW(0xFFFF, WM_SHOW_WHISPER_FLOW, 0, 0)
 
