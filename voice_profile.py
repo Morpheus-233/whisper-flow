@@ -119,21 +119,42 @@ class VoiceProfileManager:
             self.profile["word_replacements"] = reps
             self.save_profile()
 
-    def get_initial_prompt(self):
+    def get_initial_prompt(self, max_chars=800):
         """
         Builds an initial_prompt string for Whisper to prime its token decoder
         with user names, jargon, and formatting conventions.
+        Truncates safely within Whisper's context window limit (~224 tokens).
         """
         words = self.get_custom_words()
         if not words:
             return None
-        # Format as natural vocabulary context
-        return "Vocabulary: " + ", ".join(words) + "."
+
+        prefix = "Vocabulary: "
+        suffix = "."
+        budget = max_chars - len(prefix) - len(suffix)
+
+        included = []
+        current_len = 0
+        for w in words:
+            w_str = str(w).strip()
+            if not w_str:
+                continue
+            cost = len(w_str) + (2 if included else 0)
+            if current_len + cost <= budget:
+                included.append(w_str)
+                current_len += cost
+            else:
+                break
+
+        if not included:
+            return None
+        return prefix + ", ".join(included) + suffix
 
     def apply_replacements(self, text):
-        """
-        Applies phonetic dictionary replacements using single-pass regex matching with word boundaries.
-        Matches longer multi-word phrases first and avoids nested substring double replacements.
+        r"""
+        Applies phonetic dictionary replacements using single-pass regex matching with conditional lookarounds.
+        Uses (?<!\w) on word-start and (?!\w) on word-end so keys with trailing/internal punctuation
+        (e.g., 'cooper nets,') match and replace cleanly while preventing nested substring replacements.
         """
         if not text:
             return text
@@ -142,10 +163,19 @@ class VoiceProfileManager:
         if not reps:
             return text
 
-        sorted_keys = sorted(reps.keys(), key=len, reverse=True)
-        escaped_keys = [re.escape(k) for k in sorted_keys]
-        pattern = re.compile(r'\b(' + '|'.join(escaped_keys) + r')\b', re.IGNORECASE)
-        return pattern.sub(lambda m: reps.get(m.group(0).lower(), m.group(0)), text)
+        sorted_keys = sorted([k for k in reps.keys() if k], key=len, reverse=True)
+        if not sorted_keys:
+            return text
+
+        patterns = []
+        for k in sorted_keys:
+            lb = r'(?<![\w\u0900-\u097F])' if (k[0].isalnum() or k[0] == '_' or '\u0900' <= k[0] <= '\u097F') else ''
+            rb = r'(?![\w\u0900-\u097F])' if (k[-1].isalnum() or k[-1] == '_' or '\u0900' <= k[-1] <= '\u097F') else ''
+            patterns.append(lb + re.escape(k) + rb)
+
+        reps_lower = {k.lower(): v for k, v in reps.items()}
+        pattern = re.compile(r'(' + '|'.join(patterns) + r')', re.IGNORECASE)
+        return pattern.sub(lambda m: reps_lower.get(m.group(0).lower(), m.group(0)), text)
 
     def get_active_style(self):
         return self.profile.get("active_style", "professional")

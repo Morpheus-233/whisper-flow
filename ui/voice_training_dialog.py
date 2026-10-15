@@ -4,25 +4,23 @@ import numpy as np
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QProgressBar, QStackedWidget, QWidget, QLineEdit, QListWidget,
-    QFrame, QListWidgetItem
+    QFrame, QListWidgetItem, QComboBox
 )
 from PySide6.QtCore import Qt, QTimer, Signal, QSize
 from PySide6.QtGui import QFont, QColor
 from voice_profile import VoiceProfileManager
 from ui.theme_helper import apply_dark_window_attributes
 from ui.settings_dialog import WordRowWidget
+from calibration_engine import load_calibration_dataset, compute_diff, auto_register_misheard_pairs
 
-CALIBRATION_SENTENCES = [
-    "The quick brown fox jumps over the lazy dog.",
-    "Whisper Flow transcribes my speech locally with zero latency using PySide6.",
-    "I love testing OpenCode, CTranslate2, and modern AI developer tools."
-]
+CALIBRATION_DATASET = load_calibration_dataset()
+CALIBRATION_SENTENCES = [s["text"] for s in CALIBRATION_DATASET]
 
 class VoiceTrainingDialog(QDialog):
     calibration_completed = Signal()
     _noise_step_updated = Signal(int)
     _noise_finished = Signal(float)
-    _speech_finished = Signal(str, int)
+    _speech_finished = Signal(object)
 
     def __init__(self, audio_engine, whisper_engine, parent=None):
         super().__init__(parent)
@@ -119,6 +117,14 @@ class VoiceTrainingDialog(QDialog):
         subtitle.setStyleSheet("color: #94a3b8; font-size: 12px; margin-bottom: 8px;")
         layout.addWidget(subtitle)
 
+        self.calibrated_noise = 0.005
+        self.calibrated_wpm = 135
+        self.current_sentence_idx = 0
+        self.transcribed_sentences = []
+        self.auto_registered_count = 0
+        self.calibration_dataset = CALIBRATION_DATASET
+        self.filtered_dataset = list(self.calibration_dataset)
+
         # Stacked Pages
         self.stack = QStackedWidget()
         layout.addWidget(self.stack)
@@ -130,11 +136,6 @@ class VoiceTrainingDialog(QDialog):
         self.stack.addWidget(self.page_noise)
         self.stack.addWidget(self.page_speech)
         self.stack.addWidget(self.page_review)
-
-        self.calibrated_noise = 0.005
-        self.calibrated_wpm = 135
-        self.current_sentence_idx = 0
-        self.transcribed_sentences = []
 
     def _create_noise_page(self):
         page = QWidget()
@@ -210,19 +211,49 @@ class VoiceTrainingDialog(QDialog):
     def _create_speech_page(self):
         page = QWidget()
         l = QVBoxLayout(page)
-        l.setSpacing(12)
+        l.setSpacing(10)
         l.setContentsMargins(0, 0, 0, 0)
 
-        step_lbl = QLabel("Step 2: Voice Accent & Cadence Calibration")
+        step_lbl = QLabel("Step 2: Bilingual Voice & Accent Calibration")
         step_lbl.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         step_lbl.setStyleSheet("color: #e2e8f0;")
         l.addWidget(step_lbl)
 
-        self.sentence_counter_lbl = QLabel(f"Sentence 1 of {len(CALIBRATION_SENTENCES)}:")
-        self.sentence_counter_lbl.setStyleSheet("color: #93c5fd; font-weight: bold;")
-        l.addWidget(self.sentence_counter_lbl)
+        # Filter row: category selector + counter badge
+        filter_row = QHBoxLayout()
+        filter_lbl = QLabel("Filter:")
+        filter_lbl.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        filter_row.addWidget(filter_lbl)
 
-        self.sentence_box = QLabel(CALIBRATION_SENTENCES[0])
+        self.category_combo = QComboBox()
+        self.category_combo.addItems(["All Sentences (100)", "English (50)", "Hindi / Hinglish (50)"])
+        self.category_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #1e293b;
+                color: #f8fafc;
+                border: 1px solid #334155;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 12px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #1e293b;
+                color: #f8fafc;
+                selection-background-color: #2563eb;
+            }
+        """)
+        self.category_combo.currentIndexChanged.connect(self._on_category_changed)
+        filter_row.addWidget(self.category_combo)
+
+        filter_row.addStretch()
+
+        self.sentence_counter_lbl = QLabel("")
+        self.sentence_counter_lbl.setStyleSheet("color: #93c5fd; font-weight: bold; font-size: 12px;")
+        filter_row.addWidget(self.sentence_counter_lbl)
+
+        l.addLayout(filter_row)
+
+        self.sentence_box = QLabel("")
         self.sentence_box.setStyleSheet("""
             background-color: #1e293b;
             color: #f1f5f9;
@@ -231,9 +262,14 @@ class VoiceTrainingDialog(QDialog):
             font-size: 14px;
             font-weight: 500;
             border-radius: 4px;
+            min-height: 48px;
         """)
         self.sentence_box.setWordWrap(True)
         l.addWidget(self.sentence_box)
+
+        self.keywords_lbl = QLabel("")
+        self.keywords_lbl.setStyleSheet("color: #94a3b8; font-size: 11px; font-style: italic;")
+        l.addWidget(self.keywords_lbl)
 
         self.speech_rec_status = QLabel("Click 'Start Speaking' and read the sentence above aloud.")
         self.speech_rec_status.setStyleSheet("color: #94a3b8; font-style: italic;")
@@ -244,30 +280,136 @@ class VoiceTrainingDialog(QDialog):
         self.transcribed_preview.setWordWrap(True)
         l.addWidget(self.transcribed_preview)
 
+        self.diff_status = QLabel("")
+        self.diff_status.setStyleSheet("color: #38bdf8; font-size: 11px;")
+        self.diff_status.setWordWrap(True)
+        l.addWidget(self.diff_status)
+
         l.addStretch()
 
+        # Nav & Record Buttons Row
         btn_row = QHBoxLayout()
+        self.prev_sentence_btn = QPushButton("← Prev")
+        self.prev_sentence_btn.setObjectName("secondaryBtn")
+        self.prev_sentence_btn.setEnabled(False)
+        self.prev_sentence_btn.clicked.connect(self._prev_sentence)
+        btn_row.addWidget(self.prev_sentence_btn)
+
         self.record_sentence_btn = QPushButton("Start Speaking")
         self.record_sentence_btn.clicked.connect(self._toggle_sentence_recording)
         btn_row.addWidget(self.record_sentence_btn)
 
         self.next_sentence_btn = QPushButton("Next Sentence →")
-        self.next_sentence_btn.setEnabled(False)
         self.next_sentence_btn.clicked.connect(self._advance_sentence)
         btn_row.addWidget(self.next_sentence_btn)
 
+        self.review_jump_btn = QPushButton("Review & Save →")
+        self.review_jump_btn.setObjectName("secondaryBtn")
+        self.review_jump_btn.clicked.connect(self._jump_to_review)
+        btn_row.addWidget(self.review_jump_btn)
+
         l.addLayout(btn_row)
+
+        self._update_sentence_view()
         return page
 
-    def _on_speech_finished(self, text, wpm):
+    def _on_category_changed(self, idx):
+        if idx == 1:
+            self.filtered_dataset = [s for s in self.calibration_dataset if s.get("category") == "english"]
+        elif idx == 2:
+            self.filtered_dataset = [s for s in self.calibration_dataset if s.get("category") == "hindi_hinglish"]
+        else:
+            self.filtered_dataset = list(self.calibration_dataset)
+        self.current_sentence_idx = 0
+        self._update_sentence_view()
+
+    def _update_keywords_display(self):
+        if self.filtered_dataset and self.current_sentence_idx < len(self.filtered_dataset):
+            kws = self.filtered_dataset[self.current_sentence_idx].get("phonetic_keywords", [])
+            if kws:
+                self.keywords_lbl.setText("Phonetic targets: " + ", ".join(kws))
+                return
+        self.keywords_lbl.setText("")
+
+    def _update_sentence_view(self):
+        if not self.filtered_dataset:
+            return
+        self.current_sentence_idx = max(0, min(self.current_sentence_idx, len(self.filtered_dataset) - 1))
+        item = self.filtered_dataset[self.current_sentence_idx]
+        cat = item.get("category", "")
+        badge = "[English]" if cat == "english" else "[Hindi/Hinglish]"
+        self.sentence_counter_lbl.setText(f"Sentence {self.current_sentence_idx + 1} of {len(self.filtered_dataset)} {badge}:")
+        self.sentence_box.setText(item.get("text", ""))
+        self._update_keywords_display()
+        self.transcribed_preview.setText("")
+        self.diff_status.setText("")
+        self.speech_rec_status.setText("Click 'Start Speaking' and read the sentence above aloud.")
+        self.speech_rec_status.setStyleSheet("color: #94a3b8; font-style: italic;")
+        self.prev_sentence_btn.setEnabled(self.current_sentence_idx > 0)
+        self.next_sentence_btn.setEnabled(True)
+        self.record_sentence_btn.setText("Start Speaking")
+        self.record_sentence_btn.setStyleSheet("")
+
+    def _prev_sentence(self):
+        if self.current_sentence_idx > 0:
+            self.current_sentence_idx -= 1
+            self._update_sentence_view()
+
+    def _advance_sentence(self):
+        if self.current_sentence_idx + 1 < len(self.filtered_dataset):
+            self.current_sentence_idx += 1
+            self._update_sentence_view()
+        else:
+            self._jump_to_review()
+
+    def _jump_to_review(self):
+        self._update_review_summary()
+        self.stack.setCurrentIndex(2)
+
+    def _on_speech_finished(self, data):
+        if isinstance(data, dict):
+            text = data.get("text", "")
+            wpm = data.get("wpm", 135)
+            diff_res = data.get("diff_res", {})
+            newly_added = data.get("newly_added", 0)
+        else:
+            text = str(data)
+            wpm = 135
+            target_item = self.filtered_dataset[self.current_sentence_idx] if self.filtered_dataset else {}
+            target_text = target_item.get("text", "")
+            keywords = target_item.get("phonetic_keywords", [])
+            diff_res = compute_diff(target_text, text, keywords)
+            newly_added = auto_register_misheard_pairs(diff_res.get("misheard_pairs", []), self.profile_mgr)
+
         self.calibrated_wpm = wpm
-        self.transcribed_preview.setText(f"Whisper heard: \"{text}\" ({self.calibrated_wpm} WPM)")
-        self.speech_rec_status.setText("Sentence recorded.")
+        accuracy = diff_res.get("accuracy", 100.0)
+        misheard = diff_res.get("misheard_pairs", [])
+
+        self.transcribed_preview.setText(f'Whisper heard: "{text}"  |  Accuracy: {accuracy:.1f}% ({self.calibrated_wpm} WPM)')
+
+        if misheard:
+            pairs_str = ", ".join(f"'{p['heard']}' -> '{p['target']}'" for p in misheard)
+            if newly_added > 0:
+                self.diff_status.setText(f"Auto-registered {newly_added} phonetic correction(s): {pairs_str}")
+                self.diff_status.setStyleSheet("color: #38bdf8; font-size: 11px; font-weight: bold;")
+            else:
+                self.diff_status.setText(f"Phonetic replacement(s) active: {pairs_str}")
+                self.diff_status.setStyleSheet("color: #94a3b8; font-size: 11px;")
+            self.auto_registered_count += newly_added
+        elif accuracy >= 95.0:
+            self.diff_status.setText("Excellent pronunciation! Clean match with target.")
+            self.diff_status.setStyleSheet("color: #34d399; font-size: 11px; font-weight: bold;")
+        else:
+            self.diff_status.setText("")
+
+        self.speech_rec_status.setText("Sentence recorded & calibrated.")
         self.speech_rec_status.setStyleSheet("color: #34d399; font-weight: bold;")
         self.record_sentence_btn.setText("Record Again")
         self.record_sentence_btn.setEnabled(True)
         self.record_sentence_btn.setStyleSheet("")
         self.next_sentence_btn.setEnabled(True)
+        self.prev_sentence_btn.setEnabled(self.current_sentence_idx > 0)
+        self.category_combo.setEnabled(True)
         self.transcribed_sentences.append(text)
 
     def _toggle_sentence_recording(self):
@@ -278,11 +420,20 @@ class VoiceTrainingDialog(QDialog):
             self.record_sentence_btn.setStyleSheet("background-color: #059669;")
             self.speech_rec_status.setText("Recording your voice...")
             self.speech_rec_status.setStyleSheet("color: #f59e0b; font-weight: bold;")
+            self.next_sentence_btn.setEnabled(False)
+            self.prev_sentence_btn.setEnabled(False)
+            self.category_combo.setEnabled(False)
         else:
             duration = max(0.5, time.time() - getattr(self, 'sentence_start_time', time.time()))
             audio = self.audio_engine.stop_recording()
             self.record_sentence_btn.setText("Processing...")
             self.record_sentence_btn.setEnabled(False)
+            self.next_sentence_btn.setEnabled(False)
+            self.prev_sentence_btn.setEnabled(False)
+            self.category_combo.setEnabled(False)
+
+            # Snapshot target_item before launching background transcription thread
+            target_item = dict(self.filtered_dataset[self.current_sentence_idx]) if self.filtered_dataset else {}
 
             def transcribe():
                 prompt = self.profile_mgr.get_initial_prompt()
@@ -290,22 +441,33 @@ class VoiceTrainingDialog(QDialog):
                 words_count = len(text.split())
                 wpm = int((words_count / duration) * 60)
                 calibrated_wpm = max(80, min(220, wpm))
-                self._speech_finished.emit(text, calibrated_wpm)
+
+                target_text = target_item.get("text", "")
+                keywords = target_item.get("phonetic_keywords", [])
+
+                diff_res = compute_diff(target_text, text, keywords)
+                newly_added = auto_register_misheard_pairs(diff_res.get("misheard_pairs", []), self.profile_mgr)
+
+                payload = {
+                    "text": text,
+                    "wpm": calibrated_wpm,
+                    "diff_res": diff_res,
+                    "newly_added": newly_added
+                }
+                self._speech_finished.emit(payload)
 
             threading.Thread(target=transcribe, daemon=True).start()
 
-    def _advance_sentence(self):
-        self.current_sentence_idx += 1
-        if self.current_sentence_idx < len(CALIBRATION_SENTENCES):
-            self.sentence_counter_lbl.setText(f"Sentence {self.current_sentence_idx + 1} of {len(CALIBRATION_SENTENCES)}:")
-            self.sentence_box.setText(CALIBRATION_SENTENCES[self.current_sentence_idx])
-            self.transcribed_preview.setText("")
-            self.speech_rec_status.setText("Click 'Start Speaking' and read the sentence above aloud.")
-            self.speech_rec_status.setStyleSheet("color: #94a3b8; font-style: italic;")
-            self.next_sentence_btn.setEnabled(False)
-            self.record_sentence_btn.setText("Start Speaking")
-        else:
-            self.stack.setCurrentIndex(2)
+    def _update_review_summary(self):
+        summary_text = (
+            f"✓ Room Acoustics: Calibrated ({self.calibrated_noise} RMS)\n"
+            f"✓ Voice Cadence: Normal (~{self.calibrated_wpm} WPM)\n"
+            f"✓ Sentences Calibrated: {len(self.transcribed_sentences)}\n"
+            f"✓ Phonetic Mappings Registered: {self.auto_registered_count}\n"
+            f"✓ Whisper Biasing: Active ({len(self.profile_mgr.get_custom_words())} words)"
+        )
+        if hasattr(self, "review_summary_box"):
+            self.review_summary_box.setText(summary_text)
 
     def _create_review_page(self):
         page = QWidget()
@@ -318,19 +480,16 @@ class VoiceTrainingDialog(QDialog):
         step_lbl.setStyleSheet("color: #e2e8f0;")
         l.addWidget(step_lbl)
 
-        summary_box = QLabel(
-            "✓ Room Acoustics: Calibrated\n"
-            "✓ Voice Cadence: Normal (~130 WPM)\n"
-            "✓ Whisper Biasing: Active"
-        )
-        summary_box.setStyleSheet("""
+        self.review_summary_box = QLabel("")
+        self._update_review_summary()
+        self.review_summary_box.setStyleSheet("""
             background-color: #1e293b;
             color: #34d399;
             font-weight: bold;
             padding: 10px;
             border-radius: 6px;
         """)
-        l.addWidget(summary_box)
+        l.addWidget(self.review_summary_box)
 
         lbl = QLabel("Quick-Add Custom Words or Names (never mishear these again):")
         l.addWidget(lbl)

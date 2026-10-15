@@ -47,7 +47,7 @@ class WhisperEngine:
 
     def __init__(self, model_name=None, device=None, compute_type=None, groq_api_key=None):
         cfg = load_config()
-        self.model_name = model_name or cfg.get("model_name", "base.en")
+        self.model_name = model_name or cfg.get("model_name", "base")
         self.device = device or cfg.get("device", "cpu")
         self.compute_type = compute_type or cfg.get("compute_type", "int8")
         self.groq_api_key = groq_api_key if groq_api_key is not None else cfg.get("groq_api_key", "")
@@ -160,6 +160,18 @@ class WhisperEngine:
             self.is_loading = False
             return self.model
 
+    def get_vram_usage_mb(self):
+        """Returns GPU VRAM allocated in MB. Returns 0.0 in CPU mode or if no GPU is used."""
+        if self.device == "cpu":
+            return 0.0
+        try:
+            import torch
+            if torch.cuda.is_available():
+                return float(torch.cuda.memory_allocated() / (1024 * 1024))
+        except Exception:
+            pass
+        return 0.0
+
     def _transcribe_groq(self, audio_data, api_key, sample_rate=16000, initial_prompt=None):
         """
         Cloud speech API fallback method using Groq's cloud Whisper API endpoint:
@@ -219,7 +231,13 @@ class WhisperEngine:
         )
 
         with urllib.request.urlopen(req, timeout=10.0) as resp:
-            resp_data = json.loads(resp.read().decode("utf-8"))
+            status_code = getattr(resp, "status", 200)
+            if status_code != 200:
+                raise RuntimeError(f"Groq API returned HTTP status {status_code}")
+            resp_body = resp.read().decode("utf-8")
+            resp_data = json.loads(resp_body)
+            if isinstance(resp_data, dict) and "error" in resp_data:
+                raise RuntimeError(f"Groq API returned error: {resp_data['error']}")
             return resp_data.get("text", "").strip()
 
     def transcribe(self, audio_data, sample_rate=16000, initial_prompt=None, remove_trailing_stop=False):
@@ -244,6 +262,14 @@ class WhisperEngine:
 
         if self.model is None:
             self.load_model()
+
+        # Automatic initial_prompt biasing from voice profile if not explicitly passed
+        if initial_prompt is None:
+            try:
+                from voice_profile import VoiceProfileManager
+                initial_prompt = VoiceProfileManager.get_instance().get_initial_prompt()
+            except Exception:
+                initial_prompt = None
 
         # Normalize audio if needed
         max_val = np.max(np.abs(audio_data))

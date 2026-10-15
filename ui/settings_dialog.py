@@ -282,6 +282,10 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(self.tab_dictionary, "Personal Dictionary")
         layout.addWidget(self.tabs)
 
+        self._dictionary_loaded = False
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+        QTimer.singleShot(0, self._ensure_dictionary_loaded)
+
         # Bottom Buttons
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -568,68 +572,116 @@ class SettingsDialog(QDialog):
         r_layout.addWidget(self.rep_list)
         l.addWidget(rep_group)
 
-        # Initial populate
+        # Deferred population: loaded lazily on tab switch or singleShot tick
+        return tab
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        try:
+            import ctypes
+            ctypes.windll.user32.ReleaseCapture()
+        except Exception:
+            pass
+
+    def _on_tab_changed(self, index: int):
+        if index == 2:  # Personal Dictionary tab
+            self._ensure_dictionary_loaded()
+
+    def _ensure_dictionary_loaded(self):
+        if getattr(self, '_dictionary_loaded', False):
+            return
+        self._dictionary_loaded = True
         self._refresh_vocab_list()
         self._refresh_rep_list()
 
-        return tab
-
     def _refresh_vocab_list(self):
+        self._dictionary_loaded = True
         filter_text = getattr(self, 'vocab_filter_input', None)
         query = filter_text.text().strip().lower() if filter_text else ""
         self.vocab_list.clear()
 
         all_words = self.profile_mgr.get_custom_words()
-        visible_count = 0
-
         for w in all_words:
-            if query and query not in w.lower():
-                continue
             item = QListWidgetItem(self.vocab_list)
             item.setSizeHint(QSize(0, 36))
             row_widget = WordRowWidget(w, on_remove_callback=self._on_remove_word_clicked)
             self.vocab_list.setItemWidget(item, row_widget)
-            visible_count += 1
+            if query and query not in w.lower():
+                item.setHidden(True)
 
         if hasattr(self, 'vocab_count_lbl'):
             self.vocab_count_lbl.setText(f"{len(all_words)} saved")
 
     def _filter_vocab_list(self):
-        self._refresh_vocab_list()
+        self._ensure_dictionary_loaded()
+        filter_text = getattr(self, 'vocab_filter_input', None)
+        query = filter_text.text().strip().lower() if filter_text else ""
+        for i in range(self.vocab_list.count()):
+            item = self.vocab_list.item(i)
+            widget = self.vocab_list.itemWidget(item)
+            if widget and hasattr(widget, "word"):
+                matches = not query or query in widget.word.lower()
+                item.setHidden(not matches)
 
     def _add_custom_word(self):
         w = self.new_word_input.text().strip()
         if w:
             self.profile_mgr.add_custom_word(w)
             self.new_word_input.clear()
-            self._refresh_vocab_list()
+            self._ensure_dictionary_loaded()
+            item = QListWidgetItem(self.vocab_list)
+            item.setSizeHint(QSize(0, 36))
+            row_widget = WordRowWidget(w, on_remove_callback=self._on_remove_word_clicked)
+            self.vocab_list.setItemWidget(item, row_widget)
+            all_words = self.profile_mgr.get_custom_words()
+            if hasattr(self, 'vocab_count_lbl'):
+                self.vocab_count_lbl.setText(f"{len(all_words)} saved")
+            query = self.vocab_filter_input.text().strip().lower() if hasattr(self, 'vocab_filter_input') else ""
+            if query and query not in w.lower():
+                item.setHidden(True)
 
     def _on_remove_word_clicked(self, word: str):
         self.profile_mgr.remove_custom_word(word)
-        self._refresh_vocab_list()
+        # 1-Click Instant Removal: delete row in-place via takeItem (0ms) without rebuilding entire list
+        for i in range(self.vocab_list.count()):
+            item = self.vocab_list.item(i)
+            widget = self.vocab_list.itemWidget(item)
+            if widget and getattr(widget, "word", None) == word:
+                taken = self.vocab_list.takeItem(i)
+                del taken
+                break
+        all_words = self.profile_mgr.get_custom_words()
+        if hasattr(self, 'vocab_count_lbl'):
+            self.vocab_count_lbl.setText(f"{len(all_words)} saved")
 
     def _refresh_rep_list(self):
+        self._dictionary_loaded = True
         filter_text = getattr(self, 'rep_filter_input', None)
         query = filter_text.text().strip().lower() if filter_text else ""
         self.rep_list.clear()
 
         reps = self.profile_mgr.get_replacements()
-        visible_count = 0
-
         for h, t in reps.items():
-            if query and (query not in h.lower() and query not in t.lower()):
-                continue
             item = QListWidgetItem(self.rep_list)
             item.setSizeHint(QSize(0, 38))
             row_widget = ReplacementRowWidget(h, t, on_remove_callback=self._on_remove_rep_clicked)
             self.rep_list.setItemWidget(item, row_widget)
-            visible_count += 1
+            if query and (query not in h.lower() and query not in t.lower()):
+                item.setHidden(True)
 
         if hasattr(self, 'rep_count_lbl'):
             self.rep_count_lbl.setText(f"{len(reps)} rules active")
 
     def _filter_rep_list(self):
-        self._refresh_rep_list()
+        self._ensure_dictionary_loaded()
+        filter_text = getattr(self, 'rep_filter_input', None)
+        query = filter_text.text().strip().lower() if filter_text else ""
+        for i in range(self.rep_list.count()):
+            item = self.rep_list.item(i)
+            widget = self.rep_list.itemWidget(item)
+            if widget and hasattr(widget, "heard"):
+                matches = not query or (query in widget.heard.lower() or query in getattr(widget, "target", "").lower())
+                item.setHidden(not matches)
 
     def _add_replacement_rule(self):
         h = self.rep_heard_input.text().strip()
@@ -638,11 +690,31 @@ class SettingsDialog(QDialog):
             self.profile_mgr.add_replacement(h, t)
             self.rep_heard_input.clear()
             self.rep_target_input.clear()
-            self._refresh_rep_list()
+            self._ensure_dictionary_loaded()
+            item = QListWidgetItem(self.rep_list)
+            item.setSizeHint(QSize(0, 38))
+            row_widget = ReplacementRowWidget(h, t, on_remove_callback=self._on_remove_rep_clicked)
+            self.rep_list.setItemWidget(item, row_widget)
+            reps = self.profile_mgr.get_replacements()
+            if hasattr(self, 'rep_count_lbl'):
+                self.rep_count_lbl.setText(f"{len(reps)} rules active")
+            query = self.rep_filter_input.text().strip().lower() if hasattr(self, 'rep_filter_input') else ""
+            if query and (query not in h.lower() and query not in t.lower()):
+                item.setHidden(True)
 
     def _on_remove_rep_clicked(self, heard: str):
         self.profile_mgr.remove_replacement(heard)
-        self._refresh_rep_list()
+        # 1-Click Instant Removal: delete row in-place via takeItem (0ms) without rebuilding entire list
+        for i in range(self.rep_list.count()):
+            item = self.rep_list.item(i)
+            widget = self.rep_list.itemWidget(item)
+            if widget and getattr(widget, "heard", None) == heard:
+                taken = self.rep_list.takeItem(i)
+                del taken
+                break
+        reps = self.profile_mgr.get_replacements()
+        if hasattr(self, 'rep_count_lbl'):
+            self.rep_count_lbl.setText(f"{len(reps)} rules active")
 
     def _test_ollama(self):
         models = StyleEngine.list_installed_models()
@@ -674,6 +746,11 @@ class SettingsDialog(QDialog):
         webbrowser.open("http://127.0.0.1:8000")
 
     def _launch_wizard(self):
+        try:
+            import ctypes
+            ctypes.windll.user32.ReleaseCapture()
+        except Exception:
+            pass
         from ui.voice_training_dialog import VoiceTrainingDialog
         wiz = VoiceTrainingDialog(self.audio_engine, self.whisper_engine, self)
         if wiz.exec():

@@ -23,6 +23,7 @@ except Exception as e:
 
 from whisper_engine import WhisperEngine
 from voice_profile import VoiceProfileManager
+from calibration_engine import compute_diff, auto_register_misheard_pairs
 
 # Directory paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -71,62 +72,6 @@ def audio_bytes_to_float32(audio_bytes: bytes) -> np.ndarray:
     from faster_whisper.audio import decode_audio
     return decode_audio(io.BytesIO(audio_bytes), sampling_rate=16000)
 
-
-def compute_diff(target_text: str, transcribed_text: str, phonetic_keywords=None):
-    """
-    Computes word-level diff, accuracy score, and extracts misheard pairs for dictionary mapping.
-    """
-    if phonetic_keywords is None:
-        phonetic_keywords = []
-
-    def clean_token(token: str) -> str:
-        return re.sub(r"[^\w\s]", "", token).strip().lower()
-
-    target_tokens = target_text.strip().split()
-    heard_tokens = transcribed_text.strip().split()
-
-    target_norm = [clean_token(t) for t in target_tokens]
-    heard_norm = [clean_token(t) for t in heard_tokens]
-
-    matcher = difflib.SequenceMatcher(None, target_norm, heard_norm)
-    diff = []
-    misheard_pairs = []
-    matches = 0
-
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-        if tag == "equal":
-            for ti, hj in zip(range(i1, i2), range(j1, j2)):
-                diff.append({"type": "equal", "target": target_tokens[ti], "heard": heard_tokens[hj]})
-                matches += 1
-        elif tag == "replace":
-            t_chunk = " ".join(target_tokens[i1:i2])
-            h_chunk = " ".join(heard_tokens[j1:j2])
-            diff.append({"type": "replace", "target": t_chunk, "heard": h_chunk})
-            if t_chunk and h_chunk:
-                misheard_pairs.append({"heard": h_chunk, "target": t_chunk})
-        elif tag == "delete":
-            t_chunk = " ".join(target_tokens[i1:i2])
-            diff.append({"type": "delete", "target": t_chunk, "heard": ""})
-        elif tag == "insert":
-            h_chunk = " ".join(heard_tokens[j1:j2])
-            diff.append({"type": "insert", "target": "", "heard": h_chunk})
-
-    accuracy = max(0.0, min(100.0, round((matches / max(len(target_tokens), len(heard_tokens), 1)) * 100.0, 1)))
-
-    clean_transcript = clean_token(transcribed_text)
-    missing_keywords = []
-    for kw in phonetic_keywords:
-        if clean_token(kw) not in clean_transcript:
-            missing_keywords.append(kw)
-
-    return {
-        "transcribed": transcribed_text,
-        "target": target_text,
-        "accuracy": accuracy,
-        "diff": diff,
-        "misheard_pairs": misheard_pairs,
-        "missing_keywords": missing_keywords
-    }
 
 
 class StudioRequestHandler(BaseHTTPRequestHandler):

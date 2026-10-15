@@ -39,6 +39,69 @@ def exception_hook(exctype, value, tb):
 
 sys.excepthook = exception_hook
 
+user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
+
+ERROR_ALREADY_EXISTS = 183
+SINGLE_INSTANCE_MUTEX_NAME = "Local\\WhisperFlow_SingleInstance_Mutex_v3"
+SINGLE_INSTANCE_IPC_NAME = "WhisperFlow_IPC_SingleInstance_v3"
+WM_SHOW_WHISPER_FLOW = user32.RegisterWindowMessageW("WHISPER_FLOW_SHOW_WIDGET_V3")
+
+_primary_mutex_handle = None
+
+def _run_fast_instance_check():
+    global _primary_mutex_handle
+    mutex_handle = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX_NAME)
+    mutex_err = ctypes.GetLastError()
+
+    if mutex_err == ERROR_ALREADY_EXISTS:
+        log_debug("Existing instance detected via fast-path named mutex. Broadcasting SHOW signal and exiting (<100ms).")
+        # 1. Grant permission to existing instance to take foreground
+        try:
+            user32.AllowSetForegroundWindow(0xFFFFFFFF)
+        except Exception:
+            pass
+
+        # 2. Channel A: Native Win32 broadcast message (always delivered to top-level windows)
+        try:
+            user32.PostMessageW(0xFFFF, WM_SHOW_WHISPER_FLOW, 0, 0)
+        except Exception:
+            pass
+
+        # 3. Channel B: Fast named pipe signal (pure Win32, zero Qt overhead)
+        try:
+            pipe_name = r"\\.\pipe\WhisperFlow_IPC_SingleInstance_v3"
+            h_pipe = kernel32.CreateFileW(
+                pipe_name,
+                0x40000000,  # GENERIC_WRITE
+                0,
+                None,
+                3,           # OPEN_EXISTING
+                0,
+                None
+            )
+            if h_pipe != -1 and h_pipe != 0:
+                written = wintypes.DWORD(0)
+                msg = b"SHOW\n"
+                kernel32.WriteFile(h_pipe, msg, len(msg), ctypes.byref(written), None)
+                kernel32.CloseHandle(h_pipe)
+        except Exception as e:
+            log_debug(f"Fast-path pipe write notice: {e}")
+
+        if mutex_handle:
+            try:
+                kernel32.CloseHandle(mutex_handle)
+            except Exception:
+                pass
+
+        sys.exit(0)
+
+    _primary_mutex_handle = mutex_handle
+
+# Hoist fast-path named mutex check before heavy module imports (PySide6, faster-whisper, torch, focus_detector)
+if __name__ == "__main__":
+    _run_fast_instance_check()
+
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PySide6.QtCore import Qt, QObject, Signal, Slot, QTimer, QPoint
 from PySide6.QtGui import QIcon, QPixmap, QColor, QPainter
@@ -58,14 +121,6 @@ from ui.settings_dialog import SettingsDialog
 from ui.voice_training_dialog import VoiceTrainingDialog
 from voice_profile import VoiceProfileManager
 from style_engine import StyleEngine
-
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
-
-ERROR_ALREADY_EXISTS = 183
-SINGLE_INSTANCE_MUTEX_NAME = "Local\\WhisperFlow_SingleInstance_Mutex_v3"
-SINGLE_INSTANCE_IPC_NAME = "WhisperFlow_IPC_SingleInstance_v3"
-WM_SHOW_WHISPER_FLOW = user32.RegisterWindowMessageW("WHISPER_FLOW_SHOW_WIDGET_V3")
 
 class AppSignals(QObject):
     toggle_recording = Signal()
@@ -501,8 +556,18 @@ class WhisperFlowApp:
         self.whisper_engine = WhisperEngine.get_instance(model_name)
         threading.Thread(target=self._prewarm_model, daemon=True).start()
 
-    def open_settings(self):
+    def open_settings(self, bring_to_front=True):
         if getattr(self, 'is_dialog_open', False):
+            if hasattr(self, 'active_dialog') and self.active_dialog:
+                try:
+                    user32.ReleaseCapture()
+                    if self.active_dialog.isMinimized():
+                        self.active_dialog.showNormal()
+                    self.active_dialog.raise_()
+                    self.active_dialog.activateWindow()
+                    user32.SetForegroundWindow(int(self.active_dialog.winId()))
+                except Exception:
+                    pass
             return
 
         def _do_open():
@@ -510,7 +575,34 @@ class WhisperFlowApp:
                 return
             self.is_dialog_open = True
             try:
+                try:
+                    user32.ReleaseCapture()
+                except Exception:
+                    pass
+
                 dlg = SettingsDialog(self.config, self.audio_engine, self.whisper_engine, parent=None)
+                self.active_dialog = dlg
+
+                if bring_to_front:
+                    try:
+                        primary_screen = QApplication.primaryScreen()
+                        if primary_screen:
+                            screen_geo = primary_screen.availableGeometry()
+                            x = screen_geo.x() + (screen_geo.width() - dlg.width()) // 2
+                            y = screen_geo.y() + (screen_geo.height() - dlg.height()) // 2
+                            dlg.move(x, y)
+                    except Exception:
+                        pass
+
+                def _raise_dlg():
+                    try:
+                        dlg.raise_()
+                        dlg.activateWindow()
+                        user32.SetForegroundWindow(int(dlg.winId()))
+                    except Exception:
+                        pass
+                QTimer.singleShot(0, _raise_dlg)
+
                 if dlg.exec():
                     save_config(self.config)
                     self.audio_engine.device_index = self.config.get("input_device_index")
@@ -522,12 +614,23 @@ class WhisperFlowApp:
                         self.whisper_engine = WhisperEngine.get_instance(self.config.get("model_name"))
                         threading.Thread(target=self._prewarm_model, daemon=True).start()
             finally:
+                self.active_dialog = None
                 self.is_dialog_open = False
 
         QTimer.singleShot(0, _do_open)
 
     def _launch_calibration_wizard(self):
         if getattr(self, 'is_dialog_open', False):
+            if hasattr(self, 'active_dialog') and self.active_dialog:
+                try:
+                    user32.ReleaseCapture()
+                    if self.active_dialog.isMinimized():
+                        self.active_dialog.showNormal()
+                    self.active_dialog.raise_()
+                    self.active_dialog.activateWindow()
+                    user32.SetForegroundWindow(int(self.active_dialog.winId()))
+                except Exception:
+                    pass
             return
 
         def _do_wiz():
@@ -535,9 +638,36 @@ class WhisperFlowApp:
                 return
             self.is_dialog_open = True
             try:
+                try:
+                    user32.ReleaseCapture()
+                except Exception:
+                    pass
+
                 wiz = VoiceTrainingDialog(self.audio_engine, self.whisper_engine, parent=None)
+                self.active_dialog = wiz
+
+                try:
+                    primary_screen = QApplication.primaryScreen()
+                    if primary_screen:
+                        screen_geo = primary_screen.availableGeometry()
+                        x = screen_geo.x() + (screen_geo.width() - wiz.width()) // 2
+                        y = screen_geo.y() + (screen_geo.height() - wiz.height()) // 2
+                        wiz.move(x, y)
+                except Exception:
+                    pass
+
+                def _raise_wiz():
+                    try:
+                        wiz.raise_()
+                        wiz.activateWindow()
+                        user32.SetForegroundWindow(int(wiz.winId()))
+                    except Exception:
+                        pass
+                QTimer.singleShot(0, _raise_wiz)
+
                 wiz.exec()
             finally:
+                self.active_dialog = None
                 self.is_dialog_open = False
 
         QTimer.singleShot(0, _do_wiz)
@@ -573,6 +703,8 @@ class WhisperFlowApp:
         Explicitly shows the widget and opens Preferences so the user gets immediate visual confirmation.
         """
         self.manual_show_until = time.time() + 60.0
+        if self.widget.isMinimized():
+            self.widget.showNormal()
         self.widget.show()
         self.widget.raise_()
         try:
@@ -582,7 +714,7 @@ class WhisperFlowApp:
             pass
         self.widget.activateWindow()
         self._evaluate_visibility()
-        self.open_settings()
+        self.open_settings(bring_to_front=True)
 
     def exit_app(self):
         log_debug("exit_app: shutting down application")
@@ -603,38 +735,14 @@ class WhisperFlowApp:
             self.audio_engine.stop_recording()
         QApplication.quit()
 
-def main():
+def main(mutex_handle=None):
     log_debug("=== main() started ===")
     try:
-        # 1. Single Instance Check via Atomic Windows Named Mutex (evaluated immediately)
-        mutex_handle = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX_NAME)
-        mutex_err = ctypes.GetLastError()
-        log_debug(f"Mutex creation check: handle={mutex_handle}, err={mutex_err}")
-
-        if mutex_err == ERROR_ALREADY_EXISTS:
-            log_debug("Existing instance detected via Windows mutex. Broadcasting SHOW signal and exiting cleanly.")
-            # Grant permission to existing instance to take foreground
-            try:
-                user32.AllowSetForegroundWindow(0xFFFFFFFF)
-            except Exception:
-                pass
-
-            # Channel A: Native Win32 broadcast message (always delivered to top-level windows)
-            user32.PostMessageW(0xFFFF, WM_SHOW_WHISPER_FLOW, 0, 0)
-
-            # Channel B: Qt Local Socket (instant secondary channel)
-            try:
-                app_temp = QApplication.instance() or QApplication(sys.argv)
-                socket = QLocalSocket()
-                socket.connectToServer(SINGLE_INSTANCE_IPC_NAME)
-                if socket.waitForConnected(250):
-                    socket.write(b"SHOW\n")
-                    socket.waitForBytesWritten(250)
-                    socket.disconnectFromServer()
-            except Exception as e:
-                log_debug(f"IPC socket backup notice: {e}")
-
-            sys.exit(0)
+        if mutex_handle is None:
+            mutex_handle = _primary_mutex_handle
+            if mutex_handle is None:
+                _run_fast_instance_check()
+                mutex_handle = _primary_mutex_handle
 
         # Primary instance: initialize Qt application
         app = QApplication(sys.argv)
@@ -688,4 +796,4 @@ def main():
         raise
 
 if __name__ == "__main__":
-    main()
+    main(_primary_mutex_handle)

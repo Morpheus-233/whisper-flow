@@ -2,7 +2,20 @@ import json
 import urllib.request
 import urllib.error
 import re
-from text_cleaner import clean_speech_text, format_casual_chat
+from text_cleaner import (
+    clean_speech_text,
+    format_casual_chat,
+    format_developer_mode,
+    format_custom_persona
+)
+
+__all__ = [
+    "StyleEngine",
+    "format_developer_mode",
+    "format_custom_persona",
+    "format_casual_chat",
+    "clean_speech_text"
+]
 
 OLLAMA_API_BASE = "http://127.0.0.1:11434"
 
@@ -93,7 +106,7 @@ class StyleEngine:
         cleaned_base = clean_speech_text(raw_text)
 
         # Step 2: Determine style
-        style = target_style or self.profile_mgr.get_active_style()
+        style = (target_style or self.profile_mgr.get_active_style() or "").lower()
 
         # If style is 'raw' or empty, return immediately
         if not style or style == "raw":
@@ -103,9 +116,26 @@ class StyleEngine:
         if style == "casual":
             return format_casual_chat(raw_text)
 
-        # Check if Ollama is enabled in profile
         profile = self.profile_mgr.profile
-        if not profile.get("ollama_enabled", False):
+        ollama_on = profile.get("ollama_enabled", False)
+
+        # Developer / Code mode: instant rule-based conversion when Ollama is disabled
+        if style in ("code", "developer", "dev"):
+            if not ollama_on:
+                return format_developer_mode(raw_text)
+
+        # Custom Persona: instant rule-based conversion when Ollama is disabled
+        persona_rules = (
+            profile.get("persona_rules")
+            or profile.get("custom_persona_rules")
+            or profile.get("custom_persona_prompt")
+        )
+        if style == "custom":
+            if not ollama_on:
+                return format_custom_persona(raw_text, rules=persona_rules)
+
+        # If Ollama is not enabled and style is not code/custom, return cleaned_base
+        if not ollama_on:
             return cleaned_base
 
         model_name = profile.get("ollama_model", "qwen3.5:9b-q4_K_M")
@@ -114,13 +144,13 @@ class StyleEngine:
         if style == "custom":
             custom_prompt = profile.get("custom_persona_prompt", "").strip()
             if not custom_prompt:
-                return cleaned_base
+                return format_custom_persona(raw_text, rules=persona_rules)
             system_prompt = (
                 f"{custom_prompt}\n"
                 "CRITICAL: Output ONLY the final revised text. Do NOT add preamble, quotes, or conversational commentary."
             )
         else:
-            system_prompt = PROMPTS.get(style, PROMPTS["professional"])
+            system_prompt = PROMPTS.get(style, PROMPTS.get("code" if style in ("developer", "dev") else "professional", PROMPTS["professional"]))
 
         # Call Ollama API
         try:
@@ -163,5 +193,13 @@ class StyleEngine:
                     return output
         except Exception:
             pass
+
+        # Robust failover to instant rule-based transforms if Ollama fails or times out
+        if style in ("code", "developer", "dev"):
+            return format_developer_mode(raw_text)
+        elif style == "custom":
+            return format_custom_persona(raw_text, rules=persona_rules)
+        elif style == "casual":
+            return format_casual_chat(raw_text)
 
         return cleaned_base

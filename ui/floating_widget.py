@@ -215,6 +215,10 @@ class FloatingWidget(QWidget):
                 self.config["window_y"] = self.y()
 
     def mouseReleaseEvent(self, event):
+        try:
+            user32.ReleaseCapture()
+        except Exception:
+            pass
         if event.button() == Qt.MouseButton.LeftButton:
             if self._is_potential_drag:
                 self._is_potential_drag = False

@@ -4,7 +4,7 @@ import os
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
 DEFAULT_CONFIG = {
-    "model_name": "base.en",
+    "model_name": "base",
     "device": "cpu",
     "compute_type": "int8",
     "groq_api_key": "",
