@@ -502,6 +502,8 @@ class WhisperFlowApp:
         threading.Thread(target=self._prewarm_model, daemon=True).start()
 
     def open_settings(self):
+        if getattr(self, 'is_dialog_open', False):
+            return
         self.is_dialog_open = True
         try:
             dlg = SettingsDialog(self.config, self.audio_engine, self.whisper_engine, parent=None)
@@ -551,13 +553,14 @@ class WhisperFlowApp:
     def show_widget_requested(self):
         """
         Invoked when another instance launch is attempted (e.g. user double-clicked Desktop icon).
-        Explicitly shows and brings the widget to front for 30 seconds.
+        Explicitly shows the widget and opens Preferences so the user gets immediate visual confirmation.
         """
-        self.manual_show_until = time.time() + 30.0
+        self.manual_show_until = time.time() + 60.0
         self.widget.show()
         self.widget.raise_()
         self.widget.activateWindow()
         self._evaluate_visibility()
+        self.open_settings()
 
     def exit_app(self):
         log_debug("exit_app: shutting down application")
