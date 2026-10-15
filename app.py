@@ -113,6 +113,7 @@ class WhisperFlowApp:
         self.periodic_focus_timer.start(50)
 
         self._setup_connections()
+        self.manual_show_until = time.time() + 15.0
         self.widget.show()
         self.widget.raise_()
 
@@ -344,7 +345,7 @@ class WhisperFlowApp:
 
     def manual_show_widget(self):
         """Explicitly shows and raises the widget upon manual user request."""
-        self.manual_show_until = time.time() + 3.0
+        self.manual_show_until = time.time() + 30.0
         self.widget.show()
         self.widget.raise_()
         self.widget.activateWindow()
@@ -550,9 +551,9 @@ class WhisperFlowApp:
     def show_widget_requested(self):
         """
         Invoked when another instance launch is attempted (e.g. user double-clicked Desktop icon).
-        Explicitly shows and brings the widget to front for 3 seconds.
+        Explicitly shows and brings the widget to front for 30 seconds.
         """
-        self.manual_show_until = time.time() + 3.0
+        self.manual_show_until = time.time() + 30.0
         self.widget.show()
         self.widget.raise_()
         self.widget.activateWindow()
