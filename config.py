@@ -8,6 +8,8 @@ DEFAULT_CONFIG = {
     "device": "cpu",
     "compute_type": "int8",
     "groq_api_key": "",
+    "engine_mode": "groq",  # "groq" or "local"
+    "language_mode": "hinglish",  # "hinglish" or "en"
     "paste_mode": "instant_paste",  # Automatically inserts text directly into the target box
     "global_hotkey": "ctrl+alt+space",
     "sound_effects": False,

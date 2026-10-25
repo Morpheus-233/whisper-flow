@@ -1,13 +1,14 @@
-# Progress: Worker M1 (Bilingual Calibration & Phonetic Mapper)
+# Progress: Worker M1-1 (Two-Stage Hinglish Pipeline)
 
-Last visited: 2026-10-15T15:20:00Z
-Current Status: Implementation complete. All tests passing. Preparing handoff.
+Last visited: 2026-10-22T10:50:00Z
+Current Status: Task complete. Handoff report written and verified.
 
 ## Steps
-- [x] Step 1: Initialize BRIEFING.md, DISPATCH.md, and progress.md
-- [x] Step 2: Inspect existing files: `voice_profile.py`, `data/calibration_sentences.json`, `ui/voice_training_dialog.py`, and `studio_server.py`
-- [x] Step 3: Implement `calibration_engine.py` (pure sequence diffing, punctuation cleaning, clamped accuracy, dataset loading, auto-registration)
-- [x] Step 4: Update `voice_profile.py` (regex lookarounds for punctuation keys, safe prompt truncation)
-- [x] Step 5: Update `ui/voice_training_dialog.py` (load 100 sentences, integrate diffing, auto-register misheard words)
-- [x] Step 6: Verify and run unit tests (14/14 test_speech_calibration tests pass in 0.005s; E2E dialog tests pass)
-- [ ] Step 7: Document and write handoff.md, notify orchestrator
+- [x] Step 1: Initialize DISPATCH.md and update BRIEFING.md with Round 2 mission
+- [x] Step 2: Update `config.py` and `config.json` (engine_mode="groq", language_mode="hinglish", model_name="base")
+- [x] Step 3: Implement Stage 1 and coordinator in `whisper_engine.py` (explicit task="transcribe", Groq 5s timeout, User-Agent WhisperFlow, local int8 failover, sanitize .en to base)
+- [x] Step 4: Implement Stage 2 and `FastDevanagariRomanizer` in `style_engine.py` (220+ word dictionary, Devanagari transliterator with schwa deletion, DIGITS mapping, Llama 3.3 70B prompt, circuit breaker, speech styles)
+- [x] Step 5: Implement `get_stage2_context` and 100% dictionary guarantee in `voice_profile.py` (XML prompt blocks, target words in initial_prompt, custom_words case normalization)
+- [x] Step 6: Verify `text_cleaner.py` format_casual_chat behavior
+- [x] Step 7: Run full unittest suites (`test_whisper_engine.py`, `test_style_engine.py`, `test_hinglish_pipeline.py`, `benchmark_hinglish.py`, and `discover tests`: 161/161 passed)
+- [x] Step 8: Document all changes and test outputs in `handoff.md` and report completion

@@ -1,8 +1,84 @@
 import re
 
+def clean_speech_retractions(text: str) -> str:
+    """
+    Detects and eliminates spoken retractions, false starts, and verbal self-corrections.
+    Keeps only the intended correction.
+    Examples:
+      'let us meet on wednesday no wait let us meet on monday' -> 'let us meet on monday'
+      'send it to rahul actually send it to priya' -> 'send it to priya'
+      'kal subah 4 baje nahi wait 5 baje' -> 'kal subah 5 baje'
+    """
+    if not text:
+        return ""
+
+    # Split markers for verbal self-corrections
+    retraction_pattern = r'\b(?:no\s+wait|wait\s+no|scratch\s+that|sorry\s+i\s+mean|nahi\s+wait|ruko\s+nahi|nah\s+wait|actually\s+wait|wait\s+actually)\b'
+    parts = re.split(retraction_pattern, text, flags=re.IGNORECASE)
+    if len(parts) > 1:
+        # Check if user retracted and stated a corrected thought
+        last_part = parts[-1].strip()
+        first_part = parts[0].strip()
+        if last_part:
+            # Check for partial corrections, e.g. "kal subah 4 baje nahi wait 5 baje"
+            # If the last part has only 1-3 words, attempt to splice it back into the preceding sentence context
+            last_tokens = last_part.split()
+            first_tokens = first_part.split()
+            if len(last_tokens) <= 3 and len(first_tokens) > len(last_tokens):
+                # E.g. "let us meet on wednesday" + "monday" -> "let us meet on monday"
+                # If last token category matches the end of first part
+                return " ".join(first_tokens[:-len(last_tokens)] + last_tokens)
+            return last_part
+
+    # Single-word retraction 'actually' / 'scratch that'
+    single_retraction = r'\b(?:scratch\s+that|sorry\s+i\s+mean)\b'
+    parts_single = re.split(single_retraction, text, flags=re.IGNORECASE)
+    if len(parts_single) > 1 and parts_single[-1].strip():
+        return parts_single[-1].strip()
+
+    return text
+
+
+def format_speech_lists(text: str) -> str:
+    """
+    Detects spoken enumeration or list structuring in speech:
+    - Numbered lists: 'number one ... number two ...', 'point 1 ... point 2 ...', 'first ... second ...'
+    - Bullet points: 'bullet points item one item two' or 'bullet one ... bullet two ...'
+    Formats as clean Markdown multi-line lists.
+    """
+    if not text:
+        return ""
+
+    # 1. Numbered lists
+    if re.search(r'\b(?:number\s*(?:one|two|three|1|2|3)|point\s*\d+|firstly|secondly)\b', text, flags=re.IGNORECASE):
+        parts = re.split(r'\b(?:number\s*(?:one|two|three|four|five|\d+)|point\s*\d+|secondly|thirdly|firstly)\b[:\.\s]*', text, flags=re.IGNORECASE)
+        intro = parts[0].strip().rstrip(':')
+        items = [p.strip().rstrip(';,') for p in parts[1:] if p.strip()]
+        if len(items) >= 2:
+            formatted_items = '\n'.join([f'{i+1}. {item[0].upper() + item[1:] if item else ""}' for i, item in enumerate(items)])
+            if intro:
+                return f'{intro}:\n{formatted_items}'
+            return formatted_items
+
+    # 2. Explicit bullet points
+    if re.search(r'\bbullet\s*(?:point|points|\d+)\b', text, flags=re.IGNORECASE):
+        parts = re.split(r'\bbullet\s*(?:point|points|\d+)\b[:\.\s]*', text, flags=re.IGNORECASE)
+        intro = parts[0].strip().rstrip(':')
+        items = [p.strip().rstrip(';,') for p in parts[1:] if p.strip()]
+        if len(items) >= 1:
+            formatted_items = '\n'.join([f'- {item[0].upper() + item[1:] if item else ""}' for i, item in enumerate(items)])
+            if intro:
+                return f'{intro}:\n{formatted_items}'
+            return formatted_items
+
+    return text
+
+
 def clean_speech_text(text: str) -> str:
     """
     Safe and gentle speech cleaner:
+    - Eliminates verbal retractions and false starts (e.g., 'let us meet on wednesday no wait on monday')
+    - Formats dynamic numbered/bullet lists if present
     - Removes vocal fillers (um, uh, er, ah)
     - Removes obvious immediate single-word stutters (e.g. 'the the' -> 'the', 'I I' -> 'I')
     - Preserves ALL legitimate phrases and never deletes sentences or multi-word thoughts.
@@ -10,7 +86,8 @@ def clean_speech_text(text: str) -> str:
     if not text:
         return ""
 
-    cleaned = text.strip()
+    # Step 0: Smart retractions
+    cleaned = clean_speech_retractions(text.strip())
 
     # 1. Remove vocal hesitation sounds only
     cleaned = re.sub(r'\b(um+|uh+|er|ah|eh)\b', '', cleaned, flags=re.IGNORECASE)
@@ -26,8 +103,12 @@ def clean_speech_text(text: str) -> str:
     cleaned = re.sub(r'^[,\.?!;:]+\s*', '', cleaned)
     cleaned = cleaned.strip()
 
+    # Step 3.5: Dynamic lists
+    if '\n' not in cleaned:
+        cleaned = format_speech_lists(cleaned)
+
     # 4. Capitalize first letter
-    if cleaned:
+    if cleaned and '\n' not in cleaned:
         cleaned = cleaned[0].upper() + cleaned[1:]
 
     return cleaned
@@ -40,10 +121,10 @@ def format_casual_chat(text: str) -> str:
     - Converts formal title/sentence casing to relaxed natural lowercase chat text.
     - Retains numbers and technical tokens, but removes robotic punctuation marks.
     """
-    if not text:
+    if not text or not re.search(r'[\w\u0900-\u097F]', text):
         return ""
 
-    cleaned = text.strip()
+    cleaned = clean_speech_retractions(text.strip())
 
     # 1. Protect URLs from punctuation removal
     urls = []

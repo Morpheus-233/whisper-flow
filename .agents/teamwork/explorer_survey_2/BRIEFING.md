@@ -1,48 +1,51 @@
-# BRIEFING — 2026-10-15T15:28:00Z
+# BRIEFING — 2026-10-22T10:06:00Z
 
 ## Mission
-Deep-dive investigation of Whisper Flow speech engine components, bilingual calibration dataset (100 sentences), phonetic correction mapper, voice profile, and rule-based style transformations.
+Investigate Smart Voice Calibration & Phonetic Memory architecture, data models, diff algorithms, pipeline injections, and UI for Whisper Flow.
 
 ## 🔒 My Identity
-- Archetype: teamwork_preview_explorer
-- Roles: Speech & Style Engine Explorer
+- Archetype: explorer
+- Roles: investigation, synthesis
 - Working directory: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\explorer_survey_2
-- Original parent: 594ef618-48c0-4063-b24e-931d4cc7a88e
-- Milestone: Survey & Investigation (Phase 1)
+- Original parent: b7127cef-b446-4dca-a8e7-b0da25424e7e
+- Milestone: Round 2 Survey — Smart Voice Calibration & Phonetic Memory
 
 ## 🔒 Key Constraints
 - Read-only investigation — do NOT implement
-- Produce comprehensive handoff report at C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\explorer_survey_2\handoff.md following Handoff Protocol
-- Use send_message to communicate results to parent orchestrator
+- Write only to working directory .agents/teamwork/explorer_survey_2/
+- Keep handoff report self-contained with 5 components
+- Never place source code or tests in .agents/teamwork/
 
 ## Current Parent
-- Conversation ID: 594ef618-48c0-4063-b24e-931d4cc7a88e
-- Updated: 2026-10-15T15:28:00Z
+- Conversation ID: b7127cef-b446-4dca-a8e7-b0da25424e7e
+- Updated: not yet
 
 ## Investigation State
 - **Explored paths**:
-  - `whisper_engine.py`: CPU int8 (`cpu_threads=6`, 0 MB VRAM), Groq Whisper API fallback (`whisper-large-v3-turbo`), `initial_prompt` biasing.
-  - `data/calibration_sentences.json`: Exactly 100 sentences verified (50 English IDs 1-50, 50 Hindi/Hinglish IDs 51-100).
-  - `ui/voice_training_dialog.py`: Discrepancy discovered — hardcoded to only 3 English sentences; lacks diffing, phonetic mapping, and dataset integration.
-  - `studio_server.py`: `compute_diff` implemented with word-level alignment, accuracy score, and misheard pairs; top-level WhisperEngine import issue.
-  - `voice_profile.py` & `voice_profile.json`: Profile management, `get_initial_prompt`, regex `\b` boundary flaw on punctuation-ending keys (`"cooper nets,"`), 1-click removal.
-  - `style_engine.py` & `text_cleaner.py`: Casual Chat (`format_casual_chat`) works locally; Developer Mode ("code") and Custom Persona lack rule-based zero-GPU transforms and fallback to plain text if Ollama is disabled.
-  - `tests/`: Directory does NOT exist; running `python -m unittest discover tests` mistakenly discovers third-party `site-packages\tests`.
+  - `calibration_engine.py`: `clean_token`, `strip_punctuation`, `compute_diff`, `load_calibration_dataset`, `auto_register_misheard_pairs`
+  - `voice_profile.py`: `VoiceProfileManager`, `get_initial_prompt`, `apply_replacements`, `add_replacement`
+  - `data/calibration_sentences.json`: 100 sentences (50 English, 50 Hindi/Hinglish in Roman script)
+  - `ui/voice_training_dialog.py`: 3-step dialog, audio recording, background transcription, static diff labels
+  - `whisper_engine.py`: faster-whisper CPU int8 and Groq cloud transcription
+  - `style_engine.py`: rule-based transforms and Ollama API
+  - `app.py`: recording, transcribing, styling, and pasting lifecycle
+  - `tests/`: 97 passing tests across 7 test modules
 - **Key findings**:
-  - Verified CPU int8 zero VRAM loading and inference in <150ms.
-  - Verified `compute_diff` algorithm and identified punctuation leakage in misheard pairs (`hoon.` vs `hoon`).
-  - Prototyped and verified robust regex boundary logic `(?<!\w)...(?!\w)` solving punctuation replacement failures.
-  - Defined grammar and regex specifications for rule-based Developer Mode (camelCase, snake_case, code tokens) and Custom Persona.
+  1. Script mismatch: Sentences 51-100 are Romanized Hinglish (Latin alphabet), but raw Whisper outputs Devanagari Hindi. Two-stage pipeline (Stage 1 Whisper -> Stage 2 Romanizer) is essential during calibration transcription.
+  2. Blind auto-registration in `voice_training_dialog.py` (lines 448-450) exposes user profile to audio hallucinations. Requires 1-click confirmation chip UI.
+  3. `initial_prompt` in `voice_profile.py` only biases with `custom_words`, ignoring target words from `word_replacements`.
+  4. Stage 2 LLM prompt requires structured context injection (`<phonetic_memory>` and `<personal_dictionary>`), backed by deterministic `apply_replacements()` regex post-pass to guarantee 100% fidelity.
+  5. Live accuracy diff in `voice_training_dialog.py` can be displayed with HTML color tokens, and misheard pairs rendered as 1-click `[+ Remember]` / `[✓ Remembered]` chips.
 - **Unexplored areas**:
-  - None within explorer_survey_2 scope; ready for synthesis and handoff report.
+  - Real-world Groq `llama-3.3-70b-versatile` network response times for Hinglish formatting under poor internet conditions (addressed by local engine fallback).
 
 ## Key Decisions Made
-- Confirmed need for modularizing `compute_diff` and phonetic mapper outside `studio_server.py` so both desktop UI and web studio can share it.
-- Confirmed architecture for rule-based Developer Mode and Custom Persona to eliminate GPU/LLM dependency for zero-latency styling.
-- Confirmed test suite structure required under `tests/`.
+- Formulated complete architecture and interface contracts for Round 2 Voice Calibration & Phonetic Memory.
+- Documented findings in `analysis.md` and synthesized into self-contained `handoff.md`.
 
 ## Artifact Index
-- DISPATCH.md — Received orchestrator dispatches
-- progress.md — Heartbeat and step execution log
-- BRIEFING.md — Situational awareness and state
-- handoff.md — Final 5-component handoff report
+- `DISPATCH.md` — Initial dispatch message from orchestrator
+- `BRIEFING.md` — Persistent working memory and situational awareness
+- `progress.md` — Liveness heartbeat and activity log
+- `analysis.md` — Detailed survey and architectural analysis report
+- `handoff.md` — Self-contained 5-component handoff report

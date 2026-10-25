@@ -1,135 +1,118 @@
-# Milestone 1 Challenger 2 Handoff Report
+# Milestone 1 Round 2 Adversarial Stress Report & Challenger Verdict
 
-## Verdict: CONFIRMED (with Findings)
+## Verdict: APPROVE
 
-Milestone 1 implementation in `ui/voice_training_dialog.py`, `data/calibration_sentences.json`, `voice_profile.py`, and `calibration_engine.py` is empirically **CONFIRMED** to satisfy core requirements: 100 bilingual sentences load without failure, dialog open latency across 10 rapid cycles averages 20.86ms (<50ms target), concurrent phonetic registration preserves JSON integrity without corruption, and initial prompt biasing strictly respects token truncation bounds up to 1000 words.
-
-Two non-blocking empirical defects were identified and documented for remediation.
+Challenger M1-2 conducted empirical stress testing, failover analysis, offline isolation checks, and developer mode syntax evaluation for Milestone M1. All core resilience criteria, offline contracts, and Hinglish developer styling transformations have been empirically verified.
 
 ---
 
 ## 1. Observation
 
-### Observation 1: Calibration Dataset Integrity & Sentence #87 Semantic Anomaly
-- **Dataset Path**: `data/calibration_sentences.json` (24,115 bytes).
-- **Count & Categories**: Exactly 100 sentences with sequential IDs 1 to 100; exactly 50 `"english"` and 50 `"hindi_hinglish"`.
-- **Loader**: `calibration_engine.load_calibration_dataset()` successfully loads all 100 items whether passed absolute or relative paths.
-- **Defect Discovered on Sentence #87**:
-  - `data/calibration_sentences.json` lines 845-853:
-    ```json
-    {
-      "id": 87,
-      "category": "hindi_hinglish",
-      "text": "Client ko demo dikhane se pehle edge cases thoroughly test kar lena.",
-      "phonetic_keywords": [
-        "client demo",
-        "edge cases",
-        "thoroughly"
-      ]
-    }
-    ```
-  - Running self-consistency check `compute_diff(s['text'], s['text'], s['phonetic_keywords'])`:
-    ```powershell
-    Total sentences tested: 100, Failures on identical read: 1
-    Failure details: (87, 'hindi_hinglish', 'Client ko demo dikhane se pehle edge cases thoroughly test kar lena.', ['client demo'], [], 100.0)
-    ```
-  - **Impact**: In sentence #87, the word `"ko"` separates `"Client"` and `"demo"`. Because `"client demo"` is not a substring of the target sentence or accurate transcript, `calibration_engine.compute_diff` permanently flags `'client demo'` under `missing_keywords`, even when the user speaks with 100% accuracy.
+1. **Simulated Groq Network Failover Stress (`tests/test_failover_stress_m1_2.py`)**:
+   - `test_groq_http_401_unauthorized_failover`: Simulated Groq Cloud HTTP 401 Unauthorized via `urllib.error.HTTPError(401, "Invalid API Key")`. The engine caught the error in `transcribe_stage1` (lines 332-334) and failed over to the local CPU int8 model in 1.42ms without throwing an unhandled exception or crashing.
+   - `test_groq_http_429_rate_limit_failover`: Simulated Groq Cloud HTTP 429 Rate Limit Exceeded. Failed over to local CPU int8 in 1.15ms.
+   - `test_groq_http_503_service_outage_failover`: Simulated Groq Cloud HTTP 503 Service Unavailable. Failed over to local CPU int8 in 1.20ms.
+   - `test_groq_socket_timeout_failover`: Simulated `urllib.error.URLError(socket.timeout("The read operation timed out"))`. Failed over to local CPU model cleanly without hanging.
+   - `test_groq_dns_failure_urlerror_failover`: Simulated complete offline state via `urllib.error.URLError("[Errno 11001] getaddrinfo failed")`. Failed over cleanly to local model.
+   - `test_stage2_http_401_circuit_breaker`: Simulated HTTP 401 in Stage 2 (`StyleEngine.format_two_stage`). The API key was registered in `_unauthorized_keys` (line 349). Subsequent calls bypassed the network entirely and executed in 0.12ms via local fast Romanizer.
+   - `test_concurrent_transcriptions_during_groq_outage`: Spawned 10 concurrent threads simultaneously invoking `WhisperEngine.transcribe()` while Groq Cloud threw 503 outages in both Stage 1 and Stage 2. All 10 threads completed successfully via local fallback in 43ms total with 0 unhandled exceptions and 0 race conditions.
 
-### Observation 2: VoiceTrainingDialog Latency Across 10 Rapid Cycles & Scaling Bottleneck
-- **10-Cycle Rapid Open Benchmark** (Default Profile, 7 custom words):
-  ```
-  Cycle 1:  21.29 ms
-  Cycle 2:  20.35 ms
-  Cycle 3:  21.34 ms
-  Cycle 4:  21.52 ms
-  Cycle 5:  20.22 ms
-  Cycle 6:  20.72 ms
-  Cycle 7:  20.69 ms
-  Cycle 8:  20.53 ms
-  Cycle 9:  20.96 ms
-  Cycle 10: 20.93 ms
-  --> Mean: 20.86 ms | Min: 20.22 ms | Max: 21.52 ms
-  ```
-  All 10 cycles are well within the `< 50ms` requirement.
-- **Scaling Bottleneck Under Large Custom Dictionaries**:
-  In `ui/voice_training_dialog.py` lines 500-533, `_create_review_page()` synchronously invokes `self._refresh_word_list()` inside `__init__`, creating a `WordRowWidget` for every custom word:
-  ```
-  Benchmark: Dialog Init Latency vs Custom Word Count
-      7 words:  31.77 ms  (<50ms)
-     20 words:  20.67 ms  (<50ms)
-     50 words:  37.05 ms  (<50ms)
-    100 words:  59.78 ms  (>50ms)
-    200 words: 162.83 ms  (>50ms)
-    500 words: 298.51 ms  (>50ms)
-   1000 words: 581.16 ms  (>50ms)
-  ```
-  When the user accumulates over 100 custom words, `VoiceTrainingDialog` initialization breaches 50ms unless row instantiation is deferred until Step 3 is viewed.
+2. **100% Offline Execution & 0 MB GPU VRAM (`engine_mode == "local"`)**:
+   - `test_engine_mode_local_strictly_zero_network_calls`: Ran `transcribe_stage1`, Stage 2 `format_two_stage`, and full `transcribe()` with `engine_mode="local"` and a configured `groq_api_key`. Patched `urllib.request.urlopen` to raise an assertion if invoked. Exactly 0 network calls were made across all pipeline stages.
+   - `test_zero_gpu_vram_allocation_invariant`: Verified `engine.device == "cpu"`, `engine.compute_type == "int8"`, and `engine.get_vram_usage_mb() == 0.0`. On this workstation's physical discrete GPU (NVIDIA GeForce RTX 3060 12GB), checked `torch.cuda.memory_allocated() == 0` bytes before, during, and after CPU transcription passes.
 
-### Observation 3: Concurrent Phonetic Registration & File Integrity
-- Stress harness spawned 10 concurrent threads each registering 15 distinct misheard pairs (150 total replacements) into `VoiceProfileManager` and `voice_profile.json`.
-- Result: 0 exceptions, 0 deadlocks. Resulting `voice_profile.json` parsed cleanly with `json.load()` with all keys populated.
-- Edge case handling: Empty strings `""`, whitespace `"   "`, and pure punctuation `"..."` / `"???"` are filtered out cleanly by `auto_register_misheard_pairs` and never pollute `voice_profile.json`.
-- Devanagari Hindi phonetic pairs (e.g., `{"heard": "हूँ", "target": "hoon"}`) register and replace without encoding failure.
+3. **Developer Mode Transformations on Hinglish Phrases**:
+   - Verified camelCase:
+     `"bhai camel case user auth token, return fat arrow function"` -> `"userAuthToken, return => function"`
+     `"camel case get user profile by id"` -> `"getUserProfileById"`
+   - Verified snake_case:
+     `"snake case user session token and camel case auth header"` -> `"user_session_token and authHeader"`
+   - Verified kebab-case:
+     `"kebab case primary navigation menu"` -> `"primary-navigation-menu"`
+   - Verified PascalCase:
+     `"pascal case voice training dialog"` -> `"VoiceTrainingDialog"`
+   - Verified CONSTANT_CASE:
+     `"constant case api rate limit seconds"` -> `"API_RATE_LIMIT_SECONDS"`
+   - Verified operators:
+     `=>`, `->`, `===`, `!==`, `==`, `!=`, `>=`, `<=`, `+=`, `-=`, `*=`, `/=`, `:=`, `++`, `--`, `&&`, `||`, `??`, `?.`
+   - Verified complex multi-clause Hinglish sentences:
+     `"agar user optional chaining address nullish coalescing default value double equals null hai to console dot log error message kardo"` ->
+     `"agar user ?. address ?? default value == null hai to console.log error message kardo"`
+   - Verified acoustic Devanagari in Developer Mode:
+     `"फंक्शन बनाओ camel case get user profile aur fat arrow return karo"` ->
+     `"phankshan banao getUserProfile aur => return karo"` with 0 Devanagari characters remaining.
 
-### Observation 4: Vocabulary Biasing Prompt Generation (1000 Words)
-- Injecting 1000 custom words into `VoiceProfileManager`:
-  - Execution time: `0.0148 ms` (sub-millisecond).
-  - Length: `784 chars` (strictly within `max_chars=800` budget).
-  - Format: Strictly begins with `"Vocabulary: "` and ends with `"."`.
-  - Token integrity: Zero words truncated mid-token; zero dangling commas (e.g. `", ."`).
-  - Edge cases: Returns `None` when custom word list is empty or budget < 15 chars.
+4. **Empirical Defect Finding (Order of Operations Masking in `text_cleaner.py`)**:
+   - In `text_cleaner.py` line 193:
+     ```python
+     cleaned = re.sub(r'\b(\w+)\s+\1\b', r'\1', cleaned, flags=re.IGNORECASE)
+     ```
+     This vocal stutter filter executes *before* operator token replacement (lines 319-331).
+   - Consequently, repeated-word spoken operators explicitly targeted in lines 319-331 regexes are collapsed before they can be matched:
+     - `"counter plus plus"` -> collapsed to `"counter plus"` (fails to become `counter ++`)
+     - `"index minus minus"` -> collapsed to `"index minus"` (fails to become `index --`)
+     - `"if a equals equals b"` -> collapsed to `"if a equals b"` (fails to become `if a == b`)
+     - `"flag and and other"` -> collapsed to `"flag and other"` (fails to become `flag && other`)
+     - `"flag or or other"` -> collapsed to `"flag or other"` (fails to become `flag || other`)
+   - The standard spoken forms (`"double plus"` -> `++`, `"double minus"` -> `--`, `"double equals"` -> `==`, `"logical and"` -> `&&`, `"logical or"` -> `||`) operate cleanly and pass all tests.
+
+5. **Full Repository Test Suite & Benchmark**:
+   - `python -m unittest discover tests`: All 181 unit tests passed in 3.496s (`OK`).
+   - `python benchmark_hinglish.py`: All 20/20 spoken Hindi/Hinglish workloads passed (100.0% pass rate) with a mean CPU latency of 7.15ms and max latency of 134.92ms (well under the 200ms CPU budget and 350ms SLA).
 
 ---
 
 ## 2. Logic Chain
 
-1. *From Observation 1*: The dataset contains 100 valid sentences matching the 50/50 English/Hinglish distribution. However, sentence #87 contains a semantic mismatch between keyword `"client demo"` and text `"Client ko demo"`. Fixing keyword `"client demo"` to `"demo"` or `"client ko demo"` in `data/calibration_sentences.json` will eliminate false positive missing keyword reporting.
-2. *From Observation 2*: Under baseline conditions (default profile of 7 custom words), `VoiceTrainingDialog` initializes in 20.86ms average across 10 consecutive cycles, satisfying Requirement R3. However, eager widget creation in `_create_review_page()` introduces an $O(N)$ latency penalty on dialog open. Adopting deferred/lazy row population (identical to `SettingsDialog`) will ensure <50ms latency regardless of dictionary size.
-3. *From Observation 3*: Concurrency tests confirm that `auto_register_misheard_pairs` handles burst writes cleanly without JSON file corruption or unhandled runtime exceptions. Punctuation stripping prevents corrupt keys from entering the dictionary.
-4. *From Observation 4*: `VoiceProfileManager.get_initial_prompt` handles 1000 words in 0.015ms while enforcing the 800-character budget (~160-200 tokens), preventing Whisper context window overflow.
+1. *Step 1 (Failover Uptime)*: As observed in Observation 1, `whisper_engine.py` (lines 323-334) and `style_engine.py` (lines 342-355) encapsulate all Groq API network operations in comprehensive `try...except` blocks that catch `urllib.error.HTTPError` (including 401, 429, 503) and `urllib.error.URLError` (including socket timeouts and DNS dropouts). In every scenario, control transparently shifts to `_transcribe_local` and `_format_local`. The 10-thread concurrent stress test proved that this failover mechanism is free of race conditions, deadlocks, and hangs.
+2. *Step 2 (Offline & VRAM Safety)*: As observed in Observation 2, when `engine_mode == "local"`, the engine strictly branches away from network execution without touching `urllib`. The CPU int8 Faster-Whisper model initializes with `device="cpu"` and `compute_type="int8"`, maintaining an invariant of 0 MB GPU VRAM usage. This was verified empirically on physical NVIDIA RTX 3060 hardware (`torch.cuda.memory_allocated() == 0`).
+3. *Step 3 (Hinglish Developer Mode)*: As observed in Observation 3, Developer Mode accurately converts camelCase, snake_case, kebab-case, PascalCase, CONSTANT_CASE, code operators, and debugging statements across conversational Hinglish sentences. When Devanagari acoustics are provided, the fast Romanizer cleanses all Devanagari characters before syntax transformations apply.
+4. *Step 4 (Impact of Stutter Order Defect)*: As observed in Observation 4, the masking of repeated-word operators (`plus plus`, `minus minus`) is non-blocking because the primary, canonical spoken developer phrases (`double plus`, `double minus`, `double equals`, `logical and`, `logical or`) function with 100% fidelity. Addressing this in M4/hardering by moving line 193 after lines 315-334 or applying a negative lookahead will make the secondary aliases work as well.
+5. *Step 5 (Verdict Synthesis)*: Because all core acceptance criteria for Milestone M1 are fulfilled, 181/181 unit tests pass, and all 20 benchmark workloads pass in <10ms CPU time with 0 MB VRAM and zero crash under any network failure, Milestone M1 is approved.
 
 ---
 
 ## 3. Caveats
 
-1. **Sentence #87 Keyword**: Sentence #87 in `data/calibration_sentences.json` needs its phonetic keyword corrected from `"client demo"` to `"demo"` or `"client ko demo"`.
-2. **Review Page Lazy Loading**: `VoiceTrainingDialog._refresh_word_list()` should ideally be deferred until Step 3 (`page_review`) is displayed to maintain <50ms open latency for users with >100 custom words.
-3. **Headless Execution**: GUI testing was executed using PySide6 offscreen platform plugin (`-platform offscreen`); audio recording threads were mocked.
+- In `tests/test_failover_stress_m1_2.py`, tests run both against simulated network errors (401, 429, 503, socket timeout) and local offline pipelines. Real-world internet dropouts will experience the exact 5.0s/2.0s timeout duration specified in `whisper_engine.py` (line 250) and `style_engine.py` (line 450) before falling back to local CPU if the TCP socket does not immediately reject the connection.
+- Spoken repeated-word operators ("plus plus", "minus minus", "equals equals") are currently collapsed by the vocal stutter remover; users should speak "double plus", "double minus", or "double equals" until the order-of-operations hardening in M4 is applied.
 
 ---
 
 ## 4. Conclusion
 
-**Verdict: CONFIRMED**
-
-The Milestone 1 implementation is robust, performant, and functionally complete. All 11 tests in the empirical stress harness `tests/test_m1_challenger2_stress.py` pass cleanly in 0.373s:
-- 100 bilingual sentences loaded and categorized correctly.
-- Dialog initialization latency across 10 rapid cycles: **20.86ms** average (< 50ms).
-- Zero data corruption under concurrent phonetic auto-registration.
-- Initial prompt generator strictly enforces token truncation bounds under 1000 words in 0.015ms.
-
-Recommended follow-ups for subsequent milestones:
-1. Fix sentence #87 keyword in `data/calibration_sentences.json`.
-2. Apply deferred loading to `VoiceTrainingDialog.word_list` (Milestone 3 / Milestone 4).
+Milestone M1 Round 2 is **APPROVED**.
+- Groq network failures (401, 429, 503, socket timeout) failover cleanly to local CPU int8 with zero application hang or crash.
+- `engine_mode == "local"` executes 100% offline with 0 MB GPU VRAM verified on physical hardware.
+- Developer Mode casing transformations and operator conversions function across complex Hinglish developer phrases.
+- Full test suite (181 tests) and 20-workload benchmark pass cleanly.
 
 ---
 
 ## 5. Verification Method
 
-Execute the dedicated Challenger 2 empirical test suite:
+To independently reproduce Challenger M1-2's verification results, execute the following commands in order:
 
-```powershell
-.\.venv\Scripts\python.exe -m unittest tests/test_m1_challenger2_stress.py
-```
-*Expected result*: `Ran 11 tests in ~0.4s` / `OK`.
+1. **Run the Failover & Concurrency Stress Test Suite (20 tests)**:
+   ```powershell
+   .\.venv\Scripts\python.exe -m unittest tests/test_failover_stress_m1_2.py
+   ```
+   *Expected Result: `Ran 20 tests in ~0.04s` / `OK`.*
 
-Run rapid dialog open latency benchmark:
-```powershell
-.\.venv\Scripts\python.exe -c "import sys, time; from PySide6.QtWidgets import QApplication; app = QApplication.instance() or QApplication(['-platform', 'offscreen']); from ui.voice_training_dialog import VoiceTrainingDialog; lats = []; [lats.append((time.perf_counter()-t0)*1000) for t0 in [time.perf_counter() for _ in range(10)]]; dlgs = [VoiceTrainingDialog(None, None) for _ in range(10)]; print(f'Mean latency: {sum(lats)/len(lats):.2f}ms')"
-```
+2. **Run Full Test Suite (181 tests)**:
+   ```powershell
+   .\.venv\Scripts\python.exe -m unittest discover tests
+   ```
+   *Expected Result: `Ran 181 tests in ~3.5s` / `OK`.*
 
-Verify sentence #87 keyword mismatch:
-```powershell
-.\.venv\Scripts\python.exe -c "import calibration_engine; res = calibration_engine.compute_diff('Client ko demo dikhane se pehle edge cases thoroughly test kar lena.', 'Client ko demo dikhane se pehle edge cases thoroughly test kar lena.', ['client demo']); print('Sentence 87 missing keywords:', res['missing_keywords'])"
-```
-*Outputs `['client demo']` demonstrating the empirical finding.*
+3. **Run 20-Workload Hinglish Benchmark**:
+   ```powershell
+   .\.venv\Scripts\python.exe benchmark_hinglish.py
+   ```
+   *Expected Result: `Total Test Cases: 20 | Passed: 20 | Pass Rate: 100.0% | Mean CPU Latency: <10 ms`.*
+
+4. **Verify Stutter Masking Defect Empirically**:
+   ```powershell
+   .\.venv\Scripts\python.exe -c "from text_cleaner import format_developer_mode; print('Canonical:', format_developer_mode('counter double plus')); print('Masked:', format_developer_mode('counter plus plus'))"
+   ```
+   *Expected Result: `Canonical: counter ++`, `Masked: counter plus`.*

@@ -1,7 +1,7 @@
-# BRIEFING — 2026-10-15T15:20:00Z
+# BRIEFING — 2026-10-22T10:45:00Z
 
 ## Mission
-Forensic integrity audit of Milestone 1 changes in Whisper Flow: calibration_engine.py, voice_profile.py, ui/voice_training_dialog.py, and data/calibration_sentences.json.
+Forensic integrity audit of Milestone M1 Round 2 changes in Whisper Flow: whisper_engine.py, style_engine.py, voice_profile.py, config.py, config.json, text_cleaner.py.
 
 ## 🔒 My Identity
 - Archetype: forensic_auditor
@@ -9,6 +9,8 @@ Forensic integrity audit of Milestone 1 changes in Whisper Flow: calibration_eng
 - Working directory: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\auditor_m1_1
 - Original parent: 594ef618-48c0-4063-b24e-931d4cc7a88e
 - Target: milestone 1
+- Round 2 Parent: b7127cef-b446-4dca-a8e7-b0da25424e7e
+- Round 2 Target: Milestone M1 Round 2 Two-Stage Hinglish Pipeline & Style Romanizer
 
 ## 🔒 Key Constraints
 - Audit-only — do NOT modify implementation code
@@ -17,45 +19,49 @@ Forensic integrity audit of Milestone 1 changes in Whisper Flow: calibration_eng
 - Binary verdict: CLEAN or INTEGRITY VIOLATION with raw empirical proof
 
 ## Current Parent
-- Conversation ID: 594ef618-48c0-4063-b24e-931d4cc7a88e
-- Updated: 2026-10-15T15:20:00Z
+- Conversation ID: b7127cef-b446-4dca-a8e7-b0da25424e7e
+- Updated: 2026-10-22T10:39:33Z
 
 ## Audit Scope
-- **Work product**: Milestone 1 changes (`calibration_engine.py`, `voice_profile.py`, `ui/voice_training_dialog.py`, `data/calibration_sentences.json`, `tests/test_speech_calibration.py`)
+- **Work product**: Milestone M1 Round 2 changes (`whisper_engine.py`, `style_engine.py`, `voice_profile.py`, `config.py`, `config.json`, `text_cleaner.py`)
 - **Profile loaded**: General Project (Development Mode)
 - **Audit type**: forensic integrity check
 
 ## Audit Progress
 - **Phase**: reporting
-- **Checks completed**: [Pre-populated artifact detection, Static AST analysis, Facade/stub detection, Hardcoded output detection, Zero heavy dependency import verification, Genuine test & runtime execution with difflib tracing and disk I/O, Dialog latency benchmarking, Full test discovery (82 tests), Adversarial stress-testing]
-- **Checks remaining**: []
-- **Findings so far**: CLEAN (Authentic algorithmic implementation, zero cheating, all 82 tests pass)
+- **Checks completed**: 
+  - AST analysis on all 6 target files (0 facades, 0 fake returns)
+  - FastDevanagariRomanizer algorithmic vs dictionary verification with 10 unseen Devanagari words & conjuncts (PASS)
+  - WhisperEngine.transcribe_stage1 network and local fallback execution (PASS)
+  - StyleEngine.format_two_stage network and local fallback execution (PASS)
+  - VoiceProfileManager.apply_replacements regex lookarounds & substring boundary verification (PASS)
+  - Adversarial stress testing with 10k-char inputs and regex meta-characters (PASS)
+  - Full test discovery suite run (161/161 tests passed)
+  - Automated 20-case Hinglish benchmark run (20/20 passed)
+- **Checks remaining**: None
+- **Findings so far**: CLEAN — 100% authentic algorithmic implementations; no integrity violations detected.
 
 ## Key Decisions Made
-- Confirmed Development Mode from ORIGINAL_REQUEST.md.
-- Verified AST of `calibration_engine.py` contains genuine `SequenceMatcher` opcodes and dynamic diff logic.
-- Verified runtime disk persistence in `voice_profile.py`.
-- Benchmark confirmed dialog initialization in 30.24ms (<50ms requirement).
-- Identified 4 non-blocking adversarial edge cases (Devanagari combining marks in `\w`, pure punctuation diff, and sentence #87 keyword gap).
+- Confirmed Development Mode from ORIGINAL_REQUEST.md (## 2026-10-22T09:54:41Z).
+- Tested FastDevanagariRomanizer against 10 completely unseen Hindi words not in DEV_COMMON_WORDS (e.g. अन्वेषण, कंप्यूटर, अंतरिक्ष, प्रौद्योगिकी, स्वतंत्रता, संस्कृत, विद्यार्थी, विस्मयकारी, अभूतपूर्व, चंद्रयान) to verify genuine algorithmic transliteration.
+- Traced multipart form data and LLaMA 3.3 70B JSON payloads in mock tests to confirm genuine API network serialization and prompt structure.
+- Empirically confirmed negative lookarounds `(?<![\w\u0900-\u097F])` and `(?![\w\u0900-\u097F])` in VoiceProfileManager prevent substring clobbering.
 
 ## Artifact Index
 - DISPATCH.md — Audit dispatch task instructions
 - BRIEFING.md — Situational awareness and working memory
 - progress.md — Audit heartbeat and progress tracker
-- run_forensic_audit.py — Automated forensic verification test harness
+- run_forensic_audit_r2.py — Automated forensic verification test harness
 - handoff.md — Final forensic audit report
 
 ## Attack Surface
 - **Hypotheses tested**: 
-  - Fake test results or constants: Refuted (AST and runtime tracing confirm dynamic SequenceMatcher computation).
-  - Test cheating / mock bypass: Refuted (tests invoke actual implementations).
-  - Devanagari script compatibility: Uncovered combining mark stripping in `\w` regex.
-  - Punctuation-laden replacement keys: Confirmed working via lookarounds `(?<!\w)` and `(?!\w)`.
+  - Fake test results or constants in FastDevanagariRomanizer: Refuted. Algorithmic engine successfully transliterates arbitrary unseen Devanagari text.
+  - Hardcoded network mocks or dummy returns in format_two_stage: Refuted. Uses real urllib network requests to api.groq.com with transparent fallback on error.
+  - Substring replacement bugs in VoiceProfileManager: Refuted. Lookarounds isolate whole tokens and handle boundary punctuation cleanly.
 - **Vulnerabilities found**: 
-  - Combining marks (matras) stripped by `[^\w]` if native Devanagari is used.
-  - Sentence #87 non-contiguous keyword ("client demo" vs "Client ko demo").
-  - Pure punctuation input diff false 100% equality.
-- **Untested angles**: Hardware audio input driver under physical microphone capture.
+  - Medial schwa deletion regex may rarely drop unstressed vowels in non-dictionary Sanskrit compounds (minor linguistic limitation, non-blocking).
+- **Untested angles**: Physical live microphone hardware streaming on Windows.
 
 ## Loaded Skills
 - None specified in dispatch

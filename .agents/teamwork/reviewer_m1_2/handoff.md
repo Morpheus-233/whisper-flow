@@ -1,88 +1,168 @@
-# Milestone 1 Review & Challenge Report: Reviewer 2
+# Review & Adversarial Audit Report: Milestone M1 (Round 2)
 
-**Verdict**: `REQUEST_CHANGES`
+**Agent**: Reviewer M1-2  
+**Role**: Reviewer & Adversarial Critic  
+**Milestone**: M1 — Two-Stage Hinglish Pipeline & LLM Romanizer  
+**Verdict**: **APPROVE**  
+**Integrity Finding**: **NO INTEGRITY VIOLATION DETECTED** (Implementation is genuine, verified, and free of hardcoded test bypasses)
+
+---
 
 ## 1. Observation
-1. **Integrity Assessment**:
-   - Inspected `calibration_engine.py`, `voice_profile.py`, `ui/voice_training_dialog.py`, and `data/calibration_sentences.json`.
-   - No hardcoded test responses, fake sequence matchers, dummy facades, or cheating shortcuts detected. Diff algorithms, regex lookarounds, and dialog controllers execute genuine logic.
-   - Punctuation stripping in `calibration_engine.py` (`strip_punctuation`) successfully removes leading/trailing punctuation while preserving internal hyphens and apostrophes.
-2. **Speech Calibration Unit Tests**:
-   - Executing `.\.venv\Scripts\python.exe -m unittest tests/test_speech_calibration.py` executed 16 tests in 0.005s with status `OK`.
-   - Verified zero heavy dependencies: `calibration_engine.py` imports neither `PySide6`, `faster_whisper`, nor `torch`.
-3. **Dataset Semantic Keyword Mismatch (Sentence 87)**:
-   - In `data/calibration_sentences.json` line 849 (sentence ID 87):
-     ```json
-     {
-       "id": 87,
-       "category": "hindi_hinglish",
-       "text": "Client ko demo dikhane se pehle edge cases thoroughly test kar lena.",
-       "phonetic_keywords": ["client demo", "edge cases", "thoroughly"]
-     }
+
+1. **Automated Test Suite Execution**:
+   - Command: `.\.venv\Scripts\python.exe -m unittest discover tests`
+   - Verbatim Output:
+     ```text
+     Ran 161 tests in 3.334s
+     OK
      ```
-   - The phrase `"client demo"` does NOT appear in sentence 87 text because the word `"ko"` sits between `"Client"` and `"demo"`.
-   - Running `calibration_engine.compute_diff(s87_text, s87_text, s87_keywords)` returns `missing_keywords: ['client demo']` even with 100% speech accuracy.
-   - Running `.\.venv\Scripts\python.exe -m unittest discover tests` triggers failure in `tests/test_m1_challenger2_stress.py`:
+   - 161/161 unit tests passed with 0 failures and 0 errors across 14 test modules in `tests/`.
+
+2. **Automated Hinglish Benchmark Suite**:
+   - Command: `.\.venv\Scripts\python.exe benchmark_hinglish.py`
+   - Verbatim Output:
+     ```text
+     ================================================================================
+       BENCHMARK SUMMARY
+       Total Test Cases:       20
+       Passed:                 20
+       Failed:                 0
+       Pass Rate:              100.0%
+       Mean CPU Latency:       6.8710 ms (Budget: <200 ms)
+       Max Latency:            129.5509 ms (Budget: <200 ms)
+       Groq Cloud Budget:      <350 ms SLA
+     ================================================================================
+     >>> ALL 20 HINGLISH BENCHMARK ASSERTIONS PASSED SUCCESSFULLY! <<<
      ```
-     FAIL: test_phonetic_keywords_exist_in_sentence_text (test_m1_challenger2_stress.TestDatasetEmpiricalRigor)
-     AssertionError: 1 != 0 : Found 1 phonetic keywords that do not match their sentence text: [(87, 'client demo', 'Client ko demo dikhane se pehle edge cases thoroughly test kar lena.')]
-     ```
-4. **UI Thread & Background Thread Race Condition in `VoiceTrainingDialog`**:
-   - In `ui/voice_training_dialog.py` lines 428-450:
+
+3. **Stage 1 Acoustic Capture (`whisper_engine.py`)**:
+   - Lines 51-52: Sanitizes any `.en` suffix to `"base"` to avoid English translation bias in the acoustic model.
+   - Lines 238-250: Directs Groq API calls to `https://api.groq.com/openai/v1/audio/transcriptions` with explicit `task="transcribe"` (never `/audio/translations`), strict 5.0s timeout, and `User-Agent: WhisperFlow`.
+   - Lines 224-226 & 280: Automatically omits `language` field when `language` is `None` or `"hinglish"` to enable native multilingual phoneme capture.
+   - Lines 323-340: Transparently catches network timeouts, connection errors, HTTP 401, 403, 429, and 503 errors and fails over to local CPU int8 inference.
+   - Lines 105-123 & 176-186: In CPU mode, initializes `WhisperModel(model_name, device="cpu", compute_type="int8", cpu_threads=6)` allocating exactly `0.00 MB` GPU VRAM.
+
+4. **Zero GPU VRAM Verification on Discrete Hardware**:
+   - Host GPU: NVIDIA GeForce RTX 3060 (12 GB).
+   - Python verification snippet:
      ```python
-     def transcribe():
-         ...
-         target_item = self.filtered_dataset[self.current_sentence_idx]
+     engine = WhisperEngine.get_instance(device='cpu', compute_type='int8')
+     engine.load_model()
+     assert engine.get_vram_usage_mb() == 0.0
      ```
-   - `self.filtered_dataset` and `self.current_sentence_idx` are read inside the background worker thread `transcribe()`.
-   - While `self.record_sentence_btn` is disabled during processing, `self.next_sentence_btn`, `self.prev_sentence_btn`, and `self.category_combo` remain enabled.
-   - If the user clicks `next_sentence_btn` or changes the filter combo while transcription is running, `transcribe()` diffs against the wrong sentence or encounters `IndexError: list index out of range` if the filtered dataset size changes.
-5. **Duplicate Unpatched `compute_diff` in `studio_server.py`**:
-   - Lines 75-125 of `studio_server.py` define a duplicate `compute_diff` function that retains the original punctuation-leak bug (`h_chunk` / `t_chunk` slicing) instead of importing `from calibration_engine import compute_diff`.
-6. **Worker Handoff Verification Command 2 Omission**:
-   - In `worker_m1_1/handoff.md` line 58, the verification one-liner:
-     `.\.venv\Scripts\python.exe -c "from voice_profile import VoiceProfileManager; mgr = VoiceProfileManager.get_instance(); assert mgr.apply_replacements('I manage cooper nets, in cloud') == 'I manage Kubernetes in cloud'; print('Regex verified!')"`
-     failed with `AssertionError` because `'cooper nets,'` was not pre-populated in `voice_profile.json` (it was mocked in `test_speech_calibration.py`). Once added via `mgr.add_replacement('cooper nets,', 'Kubernetes')`, the lookaround replacement passes.
+   - Verbatim Output:
+     ```text
+     [WhisperEngine] Loading model 'base' on CPU (int8, cpu_threads=6)...
+     [WhisperEngine] Model 'base' successfully loaded on CPU (0 MB VRAM)!
+     VRAM after loading CPU model: 0.00 MB
+     ZERO GPU VRAM VERIFIED!
+     ```
+
+5. **Technical Terms Preservation (`style_engine.py` & `voice_profile.py`)**:
+   - `FastDevanagariRomanizer.DEV_COMMON_WORDS` (lines 160-186): Maps Devanagari transliterations of technical terms directly to clean English (`'कोड': 'code'`, `'सर्वर': 'server'`, `'कमिट': 'commit'`, `'डिप्लॉय': 'deploy'`, `'गिटहब': 'github'`, `'पीआर': 'PR'`, `'डेटाबेस': 'database'`, `'पाइथन': 'python'`, etc.).
+   - Groq system prompt (`GROQ_STAGE2_SYSTEM_PROMPT`, lines 39-41): Explicitly commands the LLM:
+     ```text
+     3. PRESERVE TECHNICAL AND ENGLISH WORDS:
+     - Keep all English technical words, programming jargon, and code tokens in clean, accurate English spelling (e.g., "deploy", "server", "github", "commit", "PR", "database", "backend", "frontend", "API", "bug", "branch", "repo", "query", "pipeline").
+     - Never phonetically alter, translate, or mangle technical terms.
+     ```
+   - Verified via test input: `हम स्टेजिंग सर्वर पर डिप्लॉय करेंगे, गिटहब पर कमिट और पीआर चेक करेंगे।` -> output: `hum staging server par deploy karenge, github par commit aur PR check karenge.` (All terms preserved in clean English).
+
+6. **Network Exception Failover & Circuit Breaker**:
+   - Adversarial simulation tested 6 failure modes against Stage 1 & Stage 2:
+     - Connection Timeout (`URLError timed out`) -> clean fallback to local CPU Romanizer.
+     - HTTP 401 Unauthorized -> clean fallback, registered key in `_unauthorized_keys`.
+     - HTTP 403 Forbidden -> clean fallback.
+     - HTTP 429 Rate Limit -> clean fallback.
+     - HTTP 503 Service Unavailable -> clean fallback.
+     - Malformed non-JSON payload -> clean fallback.
+   - Circuit breaker verification: Subsequent calls with an unauthorized key immediately bypassed network operations with 0ms network latency.
+
+7. **Integrity Audit Check**:
+   - Ripgrep queries across source code for benchmark phrases (`staging server par deploy`, `chai peene chalte`, `if raw_text ==`, `if text ==`) confirmed that benchmark text strings are NOT hardcoded in `style_engine.py`, `whisper_engine.py`, `text_cleaner.py`, or `voice_profile.py`.
+   - Algorithm in `FastDevanagariRomanizer` contains complete independent vowel, consonant, matra, virama, nukta, and digit transliteration tables alongside 220+ conversational dictionary words and schwa deletion heuristics.
+
+---
 
 ## 2. Logic Chain
-- *Step 1 (Integrity & Core Correctness)*: Observations 1 and 2 prove that `calibration_engine.py` and `voice_profile.py` genuinely implement clean diffing and lookaround regex replacements without integrity violations.
-- *Step 2 (Dataset Defect)*: Observation 3 establishes that sentence 87 contains a keyword (`"client demo"`) that cannot match its sentence text (`"Client ko demo..."`). Because `compute_diff` permanently flags `"client demo"` as missing, calibration feedback is corrupted for this sentence and the project test suite (`discover tests`) fails.
-- *Step 3 (UI Race Condition)*: Observation 4 proves that accessing mutable UI state (`self.filtered_dataset[self.current_sentence_idx]`) inside an asynchronous daemon thread without capturing a local snapshot or disabling navigation controls can lead to incorrect diff pairings or runtime crashes.
-- *Step 4 (Interface Contract Drift)*: Observation 5 shows that while M1 created `calibration_engine.py`, `studio_server.py` was not updated to use it, leaving the web calibration endpoint with unstripped punctuation.
-- *Step 5 (Verdict)*: Findings 1 and 2 are functional regressions affecting test suite green status and UI thread safety. Therefore, the required verdict is `REQUEST_CHANGES`.
 
-## 3. Caveats
-- `studio_server.py` was not explicitly listed in the 4 files dispatched to Worker M1, although it was listed in the `PROJECT.md` interface contract (`calibration_engine.py ↔ ui/voice_training_dialog.py & studio_server.py`). Updating it is recommended for end-to-end consistency.
-- Audio input tests in `test_speech_calibration.py` use mocked audio buffers; physical microphone tests require a physical audio device.
+1. *Stage 1 Integrity & Task Verification*:
+   - Observation 3 shows `WhisperEngine._transcribe_groq` hits `/audio/transcriptions` with explicit `task="transcribe"`, and `_transcribe_local` invokes `WhisperModel.transcribe(task="transcribe")`.
+   - Because `task="translate"` is strictly avoided, Whisper outputs verbatim acoustics without forcing English translation.
+   - Auto-detection of language (by omitting `language` for `hinglish` / `None`) allows both Hindi phonemes and English loanwords to be captured without truncation.
 
-## 4. Conclusion
-Milestone 1 implements strong, high-performance foundations with zero heavy dependencies and valid regex lookarounds, but requires changes to fix a dataset semantic bug and a UI background thread race condition.
+2. *Resilience & Exception Safety*:
+   - Observations 3 & 6 demonstrate that both Stage 1 (`whisper_engine.py:323-340`) and Stage 2 (`style_engine.py:342-358`) wrap network requests in strict timeout blocks (`timeout=5.0s` and `timeout=2.0s`) and catch all network exceptions.
+   - When offline, rate-limited, or unauthenticated, the pipeline cleanly falls back to local CPU int8 `WhisperModel` and `FastDevanagariRomanizer`.
+   - The circuit breaker caches unauthorized keys to prevent repeated timeout delays.
 
-### Required Changes for Worker M1:
-1. **Fix Sentence 87 Keyword in `data/calibration_sentences.json`**:
-   - Change `"client demo"` to `"demo"` (or update sentence text to `"Client demo dikhane se pehle edge cases thoroughly test kar lena."`) so that the phonetic target actually exists in the sentence.
-2. **Harden `ui/voice_training_dialog.py` Against Race Conditions**:
-   - Capture `target_item = self.filtered_dataset[self.current_sentence_idx]` locally *before* spawning `threading.Thread(target=transcribe, daemon=True).start()`.
-   - Disable `self.next_sentence_btn`, `self.prev_sentence_btn`, and `self.category_combo` when recording stops / transcription begins, and re-enable them in `_on_speech_finished`.
-3. **(Recommended) Deduplicate `compute_diff` in `studio_server.py`**:
-   - Replace lines 75-125 in `studio_server.py` with `from calibration_engine import compute_diff`.
+3. *Zero GPU VRAM Mandate*:
+   - Observation 4 confirms that loading the local `base` model with `device="cpu"` and `compute_type="int8"` results in 0.00 MB VRAM allocation, verified on hardware with an RTX 3060 discrete GPU.
 
-## 5. Verification Method
-1. **Run Full Test Suite**:
+4. *Hinglish Naturalness & Technical Term Preservation*:
+   - Observation 5 confirms technical words ("deploy", "server", "github", "commit", "PR") remain in clean English whether entered in Latin or Devanagari script.
+   - `FastDevanagariRomanizer` handles complex conjuncts (`क्षत्रिय`, `ज्ञान`, `प्रोग्रामिंग`), numerals, and punctuation dandas (`।`, `॥`) without leaving residual Devanagari script or crashing.
+
+5. *Stage 3 Deterministic Exact Match Guarantee*:
+   - In `voice_profile.py` lines 194-227, `apply_replacements` uses regex lookaround boundaries `(?<![\w\u0900-\u097F])... (?![\w\u0900-\u097F])`.
+   - In `whisper_engine.transcribe()`, Stage 3 is executed on the output of Stage 2, ensuring that all user-defined dictionary words and phonetic corrections match with 100% fidelity.
+
+---
+
+## 3. Findings
+
+### [Minor] Finding 1: Quote Stripping Order in Groq LLM Response Formatter
+- **What**: In `style_engine.py` lines 454-460 (`_format_groq`), quote stripping (`if content.startswith('"') and content.endswith('"'): content = content[1:-1].strip()`) executes *before* preamble regex stripping (`re.sub(r'^(Here is the revised text:?|Revised text:?|Here\'s your text:?)\s*', '', content)`).
+- **Where**: `style_engine.py:454-460`
+- **Why**: If an LLM response prepends both a conversational preamble AND surrounds the revised text in quotes (e.g. `Here is the revised text: "Main kal code push kar dunga."`), the preamble is stripped second, leaving the outer quotation marks intact around the text.
+- **Risk Level**: Low. The system prompt explicitly commands `- Output ONLY the final revised text. Do NOT output preamble, greetings, explanations, notes, quotation marks, or markdown blocks`, which Llama 3.3 70B adheres to under temperature 0.1.
+- **Suggestion**: In a future polish pass, re-run `content = content[1:-1].strip()` after the regex preamble cleanup, or use `content.strip(' \t\r\n"\'')`.
+
+---
+
+## 4. Caveats
+
+- **Network Dependency for Groq Cloud**: Groq Cloud features (sub-100ms Whisper turbo and Llama 3.3 70B stylist) require a valid Groq API key and internet connectivity. However, this is fully mitigated by the verified local CPU int8 fallback and local `FastDevanagariRomanizer`, ensuring 100% offline capability.
+- **Transcribe with style=None**: When `WhisperEngine.transcribe(..., style=None)` is called, it returns Romanized acoustic text without applying `VoiceProfileManager.apply_replacements`. When `style` is provided (`"casual"`, `"developer"`, etc.), Stage 3 dictionary replacement is executed deterministically. This matches the Round 1 test contract.
+
+---
+
+## 5. Conclusion
+
+**Verdict**: **APPROVE**
+
+Milestone M1 (Two-Stage Hinglish Pipeline & LLM Romanizer) meets and exceeds all acceptance criteria and interface specifications:
+- Exception safety and network timeouts (5.0s acoustic, 2.0s stylist) are robustly implemented.
+- Automatic failover to local CPU int8 inference is verified across all network error scenarios.
+- Zero GPU VRAM consumption (0.00 MB allocated) is verified on an RTX 3060 system.
+- Technical English terms ("deploy", "server", "github", "commit", "PR") remain clean English.
+- All 161 automated unit tests and 20/20 Hinglish benchmark test cases pass cleanly (100% pass rate).
+
+---
+
+## 6. Verification Method
+
+To independently verify the implementation and review findings, execute:
+
+1. **Full Regression & Unit Test Suite (161 tests)**:
    ```powershell
    .\.venv\Scripts\python.exe -m unittest discover tests
    ```
-   *Expected: All tests pass (including `test_m1_challenger2_stress.py`).*
-2. **Verify Sentence 87 Keyword Matching**:
+   *Expected Output: `Ran 161 tests in ~3.3s` / `OK`.*
+
+2. **20-Case Hinglish Benchmark Suite**:
    ```powershell
-   .\.venv\Scripts\python.exe -c "import json, calibration_engine; data = json.load(open('data/calibration_sentences.json', encoding='utf-8')); s = data[86]; res = calibration_engine.compute_diff(s['text'], s['text'], s['phonetic_keywords']); assert len(res['missing_keywords']) == 0, f'False positive missing keywords: {res[\"missing_keywords\"]}'; print('Sentence 87 keyword integrity verified!')"
+   .\.venv\Scripts\python.exe benchmark_hinglish.py
    ```
-3. **Run Speech Calibration Unit Tests**:
+   *Expected Output: `Passed: 20 | Pass Rate: 100.0% | Mean CPU Latency: <10 ms`.*
+
+3. **Zero GPU VRAM & Failover Verification**:
    ```powershell
-   .\.venv\Scripts\python.exe -m unittest tests/test_speech_calibration.py
+   .\.venv\Scripts\python.exe -c "from whisper_engine import WhisperEngine; e = WhisperEngine.get_instance(device='cpu', compute_type='int8'); e.load_model(); assert e.get_vram_usage_mb() == 0.0; print('0 MB VRAM Verified!')"
    ```
-   *Expected: 16 tests pass in < 0.01s.*
-4. **Verify Dialog Initialization Latency**:
+
+4. **Technical Terms Romanization Test**:
    ```powershell
-   .\.venv\Scripts\python.exe -c "import sys, time; from PySide6.QtWidgets import QApplication; app = QApplication.instance() or QApplication(sys.argv); from ui.voice_training_dialog import VoiceTrainingDialog; t0 = time.time(); dlg = VoiceTrainingDialog(None, None); elapsed = (time.time()-t0)*1000; print(f'Init: {elapsed:.2f}ms'); assert elapsed < 50.0"
+   $env:PYTHONIOENCODING="utf-8"; .\.venv\Scripts\python.exe -c "import sys; sys.stdout.reconfigure(encoding='utf-8'); from style_engine import FastDevanagariRomanizer; out = FastDevanagariRomanizer.romanize('हम स्टेजिंग सर्वर पर डिप्लॉय करेंगे, गिटहब पर कमिट और पीआर चेक करेंगे।'); assert all(w in out for w in ['server', 'deploy', 'github', 'commit', 'PR']); print('Technical Terms Verified!')"
    ```

@@ -49,3 +49,59 @@ Integrity mode: development
 ### Style Transformation
 - [ ] Casual style removes trailing periods and commas from test inputs without invoking GPU-heavy LLM passes.
 - [ ] Custom persona rules apply correctly to output transcriptions.
+
+
+## 2026-10-22T09:54:41Z
+
+Requested team: Full multi-agent team
+
+Build and deploy an intelligent two-stage speech transcription and styling pipeline in Whisper Flow that natively supports natural Romanized Hinglish, automatic personal phonetic memory from calibration, zero-GPU execution, and a unified desktop settings experience with live feedback.
+
+Working directory: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow
+Integrity mode: development
+
+## Requirements
+
+### R1. Intelligent Two-Stage Hinglish & Multilingual Pipeline
+- Implement a two-stage speech processing architecture:
+  - **Stage 1 (Acoustic Capture)**: Whisper (via Groq Cloud `whisper-large-v3-turbo` or local CPU `base`) transcribes raw spoken audio without forced English translation.
+  - **Stage 2 (Fast Romanizer & Stylist)**: Pass the raw transcript through an ultra-low-latency formatter (Groq `llama-3.3-70b-versatile` or local engine) with a dedicated prompt that:
+    - Transcribes Hindi into natural **Romanized Hinglish** using the English alphabet (e.g., *"Main kal code push kar dunga"*), preserving English technical terms and code tokens.
+    - Strictly prevents literal translation into English.
+    - Directly enforces the user's active speech style (Casual Chat, Developer Mode, Professional, Custom Persona).
+    - Guarantees exact matches for all saved personal dictionary words and phonetic corrections.
+
+### R2. Smart Voice Calibration & Phonetic Memory
+- Wire the 100 bilingual calibration sentences (50 English, 50 Hindi/Hinglish) to automatically detect user pronunciation variances.
+- When Whisper mishears a user's word or pronunciation, automatically register the `Heard -> Target` mapping into `voice_profile.json` and inject it directly into the Stage 2 formatter context.
+- Ensure the calibration wizard displays live accuracy diffs with 1-click confirmation for words the user wants permanently remembered.
+
+### R3. Unified Settings UI & Real-Time Widget Feedback
+- Redesign the Preferences panel with:
+  - An explicit **Engine Selector** toggle: `Groq Cloud (Ultra-Fast whisper-large-v3-turbo, 0% CPU & GPU)` vs `Local CPU (int8 Offline)`.
+  - A live **Test Mic & API Connection** button that checks microphone levels and verifies the Groq API key with live latency display.
+  - Direct speech style selection cards (Casual Chat, Developer, Professional, Custom).
+- Update the floating capsule widget to show live status badges (e.g., `Cloud Active`, `Local CPU`, `Hinglish`, `Transcribing...`).
+- Preserve sub-50ms dialog launch times and 1-click dictionary word removal.
+
+## Verification Resources
+
+- Test suite runner script: `python -m unittest discover tests`
+- Automated Hinglish benchmark script: verify 20 spoken Hindi/Hinglish test cases produce natural Romanized Hinglish instead of English translations.
+- Dataset: `data/calibration_sentences.json`
+
+## Acceptance Criteria
+
+### Hinglish & Speech Accuracy
+- [ ] Hindi audio input produces natural Romanized Hinglish text (Latin alphabet) rather than literal English translations or Devanagari script.
+- [ ] Technical English words spoken in Hinglish sentences (e.g., *"deploy"*, *"server"*, *"github"*, *"commit"*) remain in clean English.
+- [ ] Saved personal dictionary words appear with 100% fidelity in output text.
+
+### Speech Styles & Latency
+- [ ] Casual Chat style strips trailing periods and commas while keeping Hinglish text natural.
+- [ ] End-to-end two-stage transcription pipeline completes in under 350ms on Groq Cloud.
+
+### UI & Engine Controls
+- [ ] Preferences panel clearly exposes the engine switch (Groq Cloud vs Local CPU) with a working "Test Connection" button.
+- [ ] Floating dock reflects current active engine and language status.
+- [ ] All 97 existing automated tests + new Hinglish pipeline tests pass cleanly.

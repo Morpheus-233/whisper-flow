@@ -1,66 +1,63 @@
-# BRIEFING — 2026-10-15T15:25:00Z
+# BRIEFING — 2026-10-22T10:48:00Z
 
 ## Mission
-Conduct an independent code and edge-case review of Milestone 1 changes (Speech Calibration & Voice Profile Engine) with quality and adversarial critique.
+Adversarial and quality review of Milestone M1 implementation for Whisper Flow (Round 2).
 
 ## 🔒 My Identity
-- Archetype: reviewer_and_adversarial_critic
+- Archetype: reviewer-critic
 - Roles: reviewer, critic
 - Working directory: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\reviewer_m1_2
-- Original parent: 594ef618-48c0-4063-b24e-931d4cc7a88e
-- Milestone: Milestone 1 (Speech Calibration & Voice Profile Engine)
-- Instance: 2 of 2
+- Original parent: b7127cef-b446-4dca-a8e7-b0da25424e7e
+- Milestone: M1
+- Instance: 2 of 2 (Reviewer M1-2)
 
 ## 🔒 Key Constraints
 - Review-only — do NOT modify implementation code
-- Actively check for integrity violations (hardcoded test outputs, dummy implementations, shortcuts, fabricated verification, self-certifying work)
-- Write only to own directory: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\reviewer_m1_2
-- Must issue clear verdict: APPROVE or REQUEST_CHANGES
+- Review-only: do NOT fix test failures or implementation bugs yourself
+- Actively check for integrity violations (hardcoding, facades, shortcuts, fake tests)
+- Adversarial review: stress-test assumptions, failovers, exception safety, technical terms preservation, CPU-only int8 zero GPU VRAM consumption
 
 ## Current Parent
-- Conversation ID: 594ef618-48c0-4063-b24e-931d4cc7a88e
-- Updated: 2026-10-15T15:25:00Z
+- Conversation ID: b7127cef-b446-4dca-a8e7-b0da25424e7e
+- Updated: 2026-10-22T10:39:32Z
 
 ## Review Scope
-- **Files to review**:
-  - `calibration_engine.py`
-  - `voice_profile.py`
-  - `ui/voice_training_dialog.py`
-  - `data/calibration_sentences.json`
-  - `tests/test_speech_calibration.py`
-- **Interface contracts**: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\orchestrator\PROJECT.md
-- **Review criteria**: Correctness, completeness, quality, edge cases, error handling, UI responsiveness, performance, security, and integrity violations
-
-## Key Decisions Made
-- Confirmed zero integrity violations: no hardcoded test outputs or dummy facades.
-- Verified `tests/test_speech_calibration.py` passes 16/16 tests in 0.005s.
-- Identified 2 major defects and 2 minor defects:
-  1. Major: Sentence 87 in `data/calibration_sentences.json` has keyword `'client demo'` while sentence text has `'Client ko demo...'`, causing permanent false-negative keyword failure in calibration and test failure in `test_m1_challenger2_stress.py`.
-  2. Major: Race condition in `ui/voice_training_dialog.py` where background `transcribe()` reads `self.current_sentence_idx` and `self.filtered_dataset` without capturing a local snapshot, while navigation buttons remain enabled during processing.
-  3. Minor: `studio_server.py` maintains an unpatched duplicate copy of `compute_diff` instead of importing from `calibration_engine.py`.
-  4. Minor: Verification command in worker handoff omitted prerequisite dictionary insertion for standalone CLI execution.
-- Verdict rendered: `REQUEST_CHANGES`.
-
-## Artifact Index
-- `DISPATCH.md` — Inbound instructions and prompt log
-- `BRIEFING.md` — Situational awareness and persistent memory
-- `progress.md` — Liveness heartbeat and milestone steps
-- `handoff.md` — Final review and challenge report
+- **Files to review**: `whisper_engine.py`, `style_engine.py`, `text_cleaner.py`, `voice_profile.py`, `config.py`, `tests/`, `benchmark_hinglish.py`, worker handoff
+- **Interface contracts**: `PROJECT.md`, `ORIGINAL_REQUEST.md` (specifically `## 2026-10-22T09:54:41Z`), `TEST_READY.md`
+- **Review criteria**: Exception safety, network timeouts, failover to local CPU int8, zero GPU VRAM consumption, technical terms preservation ("deploy", "server", "github", "commit", "PR"), unit tests passing, Hinglish benchmark performance
 
 ## Review Checklist
-- **Items reviewed**: `calibration_engine.py`, `voice_profile.py`, `ui/voice_training_dialog.py`, `data/calibration_sentences.json`, `tests/test_speech_calibration.py`, `tests/test_m1_challenger2_stress.py`
-- **Verdict**: REQUEST_CHANGES
-- **Unverified claims**: Worker verification step 2 CLI one-liner required prerequisite key registration.
+- **Items reviewed**:
+  - `whisper_engine.py` (Stage 1 acoustic capture, Groq endpoint, local CPU int8 fallback, zero VRAM)
+  - `style_engine.py` (Stage 2 Groq llama-3.3-70b-versatile, anti-translation prompt, FastDevanagariRomanizer, circuit breaker)
+  - `voice_profile.py` (Stage 3 deterministic exact match regex post-pass, prompt biasing, XML context)
+  - `text_cleaner.py` (Casual Chat, Developer Mode, Persona transforms)
+  - `config.py` & `config.json` (model_name sanitization, engine_mode, language_mode)
+  - `data/calibration_sentences.json` (100 bilingual sentences: 50 English, 50 Romanized Hinglish)
+  - `benchmark_hinglish.py` (20-workload benchmark)
+  - Unit test suite (161 tests across 14 modules in `tests/`)
+- **Verdict**: APPROVE
+- **Unverified claims**: None. All claims independently verified via automated execution and adversarial stress tests.
 
 ## Attack Surface
 - **Hypotheses tested**:
-  - Punctuation-heavy & symbol keys in lookaround regex: Passed
-  - Unicode quotes & Hindi text: Passed
-  - Scalability under 1000 custom words in initial prompt: Passed (<0.02ms, bounded <=800 chars)
-  - Dialog presentation latency across 10 cycles: Passed (Mean 22.58ms < 50ms)
-  - Keyword presence across all 100 calibration sentences: Failed on sentence 87
-  - UI navigation race condition during background transcription: Confirmed vulnerability
+  - Network timeouts (urllib timeout 5.0s in Stage 1, 2.0s in Stage 2) -> Verified failover to local CPU.
+  - HTTP errors (401 Unauthorized, 403 Forbidden, 429 Rate Limit, 503 Service Unavailable) -> Verified clean failover without unhandled exceptions.
+  - Circuit breaker for invalid keys -> Verified immediate bypass on 401 to avoid repeated latency.
+  - Zero GPU VRAM consumption -> Verified on physical RTX 3060 discrete GPU (0.00 MB allocated).
+  - Technical terms preservation ("deploy", "server", "github", "commit", "PR") -> Verified in both Latin and Devanagari transliteration.
+  - Complex conjuncts & Devanagari numerals -> Verified FastDevanagariRomanizer handles them without leaking Devanagari characters.
+  - Regex metacharacters in word replacements (`c++`, `(api)`, `[test]`) -> Verified clean replacement.
+  - Large input stress test (10,000 tokens) -> Executed in 12.11ms on CPU.
 - **Vulnerabilities found**:
-  - Keyword mismatch in dataset sentence 87
-  - Background transcription UI race condition in `VoiceTrainingDialog`
-- **Untested angles**: Hardware microphone signal variation in physical runtime (mocked in headless CI).
+  - Minor: In `style_engine.py` line 454-460, quote stripping executes before preamble regex stripping. If an LLM returns both a preamble and quotes (e.g., `Here is the revised text: "..."`), the quotes survive.
+- **Untested angles**: None within M1 scope.
+
+## Key Decisions Made
+- Confirmed absence of integrity violations (no hardcoded outputs or facades).
+- Issued verdict: APPROVE.
+
+## Artifact Index
+- `handoff.md` — Final handoff report and verdict
+- `progress.md` — Liveness heartbeat and progress tracker
+- `DISPATCH.md` — Incoming message log

@@ -1,38 +1,18 @@
-# Dispatch: Reviewer 1 for Milestone 1
+## 2026-10-22T10:39:32Z
+sender: b7127cef-b446-4dca-a8e7-b0da25424e7e
+priority: MESSAGE_PRIORITY_HIGH
 
-**Role**: Milestone 1 Code Reviewer
-**Type**: teamwork_preview_reviewer
-**Working Directory**: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\reviewer_m1_1
-**Project Root**: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow
-**Original Request**: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\ORIGINAL_REQUEST.md
-**Project Scope Document**: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\orchestrator\PROJECT.md
-**Worker Handoff Report**: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\worker_m1_1\handoff.md
+You are Reviewer M1-1 for Whisper Flow Round 2.
+Your working directory is: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\reviewer_m1_1
+Authoritative user request: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\ORIGINAL_REQUEST.md (specifically see ## 2026-10-22T09:54:41Z).
+Project plan: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\PROJECT.md
+Worker handoff: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\worker_m1_1\handoff.md
+Test infrastructure: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\TEST_READY.md
 
-## Scope of Review
-Files implemented/modified in Milestone 1:
-- `calibration_engine.py`
-- `voice_profile.py`
-- `ui/voice_training_dialog.py`
-- `data/calibration_sentences.json`
-
-## Objectives
-1. Read ORIGINAL_REQUEST.md, PROJECT.md, and worker_m1_1 handoff.md.
-2. Review implementation for correctness, completeness, edge cases, robustness, and interface conformance.
-3. Verify:
-   - 100 sentences (50 English, 50 Hindi/Hinglish) loaded properly in `calibration_engine.py` and `ui/voice_training_dialog.py`.
-   - `compute_diff` produces accurate word diffs, clamps accuracy [0.0, 100.0], and cleans punctuation from `misheard_pairs`.
-   - Automated registration of phonetic replacements into `voice_profile.json`.
-   - Lookaround regex boundaries `(?<!\w)` and `(?!\w)` in `voice_profile.py` allow punctuation keys (like `"cooper nets,"`) to match and replace correctly.
-4. Run verification tests using `.\.venv\Scripts\python.exe -m unittest tests/test_speech_calibration.py`.
-5. Render a clear verdict: `APPROVE` or `REQUEST_CHANGES` in `handoff.md`.
-6. Send completion message to orchestrator.
-
-
-## 2026-10-15T15:11:54Z
-You are Reviewer 1 for Milestone 1.
-Your working directory is C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\reviewer_m1_1
-The project root is C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow
-Read C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\ORIGINAL_REQUEST.md, C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\orchestrator\PROJECT.md, C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\worker_m1_1\handoff.md, and your dispatch at C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\reviewer_m1_1\DISPATCH.md before starting.
-Review calibration_engine.py, voice_profile.py, and ui/voice_training_dialog.py.
-Run tests via .\.venv\Scripts\python.exe -m unittest tests/test_speech_calibration.py.
-Write handoff.md with a clear verdict: APPROVE or REQUEST_CHANGES. Notify orchestrator via send_message when complete.
+Review Milestone M1 implementation:
+1. Examine whisper_engine.py, style_engine.py, voice_profile.py, config.py, config.json, text_cleaner.py.
+2. Verify Stage 1 acoustic capture avoids forced translation, Stage 2 Romanizer and Stylist (Groq prompt + fast CPU Romanizer), 100% dictionary match guarantee, and Casual Chat formatting.
+3. Run test suites:
+   .venv\Scripts\python.exe -m unittest discover tests
+   .venv\Scripts\python.exe benchmark_hinglish.py
+4. Provide explicit verdict: APPROVE or REQUEST_CHANGES in handoff.md. Call send_message when done.

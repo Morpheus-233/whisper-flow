@@ -2,9 +2,9 @@ import sys
 import os
 import math
 import ctypes
-from PySide6.QtCore import Qt, QPoint, QTimer, Signal, QRectF
+from PySide6.QtCore import Qt, QPoint, QTimer, Signal, Slot, QRectF
 from PySide6.QtWidgets import QWidget, QMenu, QApplication
-from PySide6.QtGui import QPainter, QColor, QBrush, QPen, QPainterPath, QLinearGradient
+from PySide6.QtGui import QPainter, QColor, QBrush, QPen, QPainterPath, QLinearGradient, QFont
 
 user32 = ctypes.windll.user32
 GWL_EXSTYLE = -20
@@ -33,6 +33,8 @@ class FloatingWidget(QWidget):
     open_settings_requested = Signal()
     open_studio_requested = Signal()
     model_changed = Signal(str)
+    engine_changed = Signal(str)
+    language_changed = Signal(str)
     exit_requested = Signal()
     show_requested_from_external = Signal()
 
@@ -52,10 +54,15 @@ class FloatingWidget(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setMouseTracking(True)
 
-        # 1. Custom Initial Widget Geometry: Sleek Obsidian Capsule Dock
-        self.dock_w = 56
+        # 1. Custom Initial Widget Geometry: Sleek Obsidian Capsule Dock (64x34px)
+        self.dock_w = 64
         self.dock_h = 34
         self.dock_radius = 17.0
+
+        # Live Status Badges State
+        self.active_engine = self.config.get("engine_mode", "groq")
+        self.active_language = self.config.get("language_mode", "hinglish")
+        self.active_style = None
 
         # 2. Recording State Geometry: 3-Segment Bar from reference image
         self.btn_size = 38
@@ -175,6 +182,18 @@ class FloatingWidget(QWidget):
         if self.current_state == STATE_PASTED:
             self.set_state(STATE_IDLE)
 
+    @Slot(str)
+    @Slot(str, str)
+    @Slot(str, str, str)
+    def update_status_badges(self, engine: str, language: str = "hinglish", style: str | None = None):
+        """Updates internal status badges (engine, language, style) and repaints dock."""
+        self.active_engine = engine
+        if language is not None:
+            self.active_language = language
+        if style is not None:
+            self.active_style = style
+        self.update()
+
     def _on_animation_tick(self):
         self.pulse_phase += 0.12
         if self.pulse_phase > 2 * math.pi:
@@ -269,14 +288,52 @@ class FloatingWidget(QWidget):
             }
         """)
 
-        # Model submenu
+        # Engine submenu
+        cur_engine = (getattr(self, 'active_engine', None) or self.config.get('engine_mode', 'groq')).lower()
+        engine_menu = menu.addMenu(f"Engine: {'Groq Cloud' if cur_engine != 'local' else 'Local CPU'}")
+        engine_menu.setStyleSheet(menu.styleSheet())
+        for e_label, e_key in [("Groq Cloud (0% CPU)", "groq"), ("Local CPU (int8 Offline)", "local")]:
+            act = engine_menu.addAction(e_label)
+            if e_key == cur_engine:
+                act.setIconText("✓")
+            def _make_e_handler(k=e_key):
+                def _h():
+                    self.active_engine = k
+                    self.config["engine_mode"] = k
+                    self.engine_changed.emit(k)
+                    self.update()
+                return _h
+            act.triggered.connect(_make_e_handler(e_key))
+
+        # Language submenu
+        cur_lang = (getattr(self, 'active_language', None) or self.config.get('language_mode', 'hinglish')).lower()
+        lang_menu = menu.addMenu(f"Language: {'Hinglish' if cur_lang in ('hinglish', 'hi-en', 'hi') else 'English'}")
+        lang_menu.setStyleSheet(menu.styleSheet())
+        for l_label, l_key in [("Hinglish (Hindi + English)", "hinglish"), ("English Only", "en")]:
+            act = lang_menu.addAction(l_label)
+            if l_key == cur_lang:
+                act.setIconText("✓")
+            def _make_l_handler(k=l_key):
+                def _h():
+                    self.active_language = k
+                    self.config["language_mode"] = k
+                    self.language_changed.emit(k)
+                    self.update()
+                return _h
+            act.triggered.connect(_make_l_handler(l_key))
+
+        # Model submenu (fastest models only: base.en ~50ms, base ~60ms)
         model_menu = menu.addMenu(f"Model: {self.config.get('model_name', 'base.en')}")
         model_menu.setStyleSheet(menu.styleSheet())
-        for m in ["small", "base", "base.en", "small.en", "tiny.en"]:
-            act = model_menu.addAction(m)
-            if m == self.config.get("model_name"):
+        fast_models = [
+            ("base.en - Fast English (~50ms)", "base.en"),
+            ("base - Fast Multilingual (~60ms)", "base")
+        ]
+        for m_label, m_val in fast_models:
+            act = model_menu.addAction(m_label)
+            if m_val == self.config.get("model_name"):
                 act.setIconText("✓")
-            act.triggered.connect(lambda checked=False, model=m: self.model_changed.emit(model))
+            act.triggered.connect(lambda checked=False, model=m_val: self.model_changed.emit(model))
 
         # Speech Style submenu
         from voice_profile import VoiceProfileManager
@@ -321,12 +378,13 @@ class FloatingWidget(QWidget):
 
         if self.current_state == STATE_IDLE:
             # ─────────────────────────────────────────────────────────────
-            # 1. BESPOKE OBSIDIAN CAPSULE DOCK (Clean, High-End Initial Widget)
+            # 1. MINIMAL SLEEK OBSIDIAN CAPSULE DOCK (64x34px)
             # ─────────────────────────────────────────────────────────────
             x = self.pad_x
             dock_rect = QRectF(x, y, self.dock_w, self.dock_h)
             center = dock_rect.center()
-            cx, cy = center.x(), center.y()
+            cx = center.x()
+            cy = center.y()
 
             # Obsidian glass background with subtle violet gradient
             bg_color = QColor(14, 15, 24, 244)
@@ -341,10 +399,10 @@ class FloatingWidget(QWidget):
             painter.setPen(border_pen)
             painter.drawPath(dock_path)
 
-            # Minimalist 3-bar voice emblem inside capsule: | | |
-            # Center bar is slightly taller, outer bars gently breathe
-            bar_w = 2.6
-            bar_gap = 4.2
+            # Centered Minimalist 3-bar voice emblem: | | |
+            cx_bars = cx
+            bar_w = 2.4
+            bar_gap = 4.5
             painter.setPen(Qt.PenStyle.NoPen)
 
             h_center = 14.0 + 1.5 * math.sin(self.pulse_phase * 2)
@@ -352,14 +410,14 @@ class FloatingWidget(QWidget):
 
             # Center bar (pearl white with violet tint)
             painter.setBrush(QBrush(QColor(245, 243, 255)))
-            painter.drawRoundedRect(QRectF(cx - bar_w / 2.0, cy - h_center / 2.0, bar_w, h_center), 1.3, 1.3)
+            painter.drawRoundedRect(QRectF(cx_bars - bar_w / 2.0, cy - h_center / 2.0, bar_w, h_center), 1.2, 1.2)
 
             # Left bar
             painter.setBrush(QBrush(QColor(196, 181, 253)))
-            painter.drawRoundedRect(QRectF(cx - bar_gap - bar_w / 2.0, cy - h_outer / 2.0, bar_w, h_outer), 1.3, 1.3)
+            painter.drawRoundedRect(QRectF(cx_bars - bar_gap - bar_w / 2.0, cy - h_outer / 2.0, bar_w, h_outer), 1.2, 1.2)
 
             # Right bar
-            painter.drawRoundedRect(QRectF(cx + bar_gap - bar_w / 2.0, cy - h_outer / 2.0, bar_w, h_outer), 1.3, 1.3)
+            painter.drawRoundedRect(QRectF(cx_bars + bar_gap - bar_w / 2.0, cy - h_outer / 2.0, bar_w, h_outer), 1.2, 1.2)
 
         else:
             # ─────────────────────────────────────────────────────────────

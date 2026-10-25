@@ -157,6 +157,13 @@ class WhisperFlowApp:
         self.widget = FloatingWidget(self.config, self.audio_engine)
         self.widget.show_requested_from_external.connect(self.show_widget_requested)
 
+        # Initialize live status badges on floating widget & whisper engine
+        init_engine = self.config.get("engine_mode", "groq")
+        init_lang = self.config.get("language_mode", "hinglish")
+        init_style = self.voice_profile.get_active_style()
+        self.whisper_engine.engine_mode = init_engine
+        self.widget.update_status_badges(init_engine, init_lang, init_style)
+
         # Fast Debounced Visibility Controller (25ms debounce for snappy response)
         self.visibility_debounce_timer = QTimer(self.widget)
         self.visibility_debounce_timer.setSingleShot(True)
@@ -200,6 +207,8 @@ class WhisperFlowApp:
         self.widget.open_settings_requested.connect(self.open_settings)
         self.widget.open_studio_requested.connect(self.launch_web_voice_studio)
         self.widget.model_changed.connect(self.change_model)
+        self.widget.engine_changed.connect(self._on_engine_changed)
+        self.widget.language_changed.connect(self._on_language_changed)
         self.widget.exit_requested.connect(self.exit_app)
 
         self.signals.toggle_recording.connect(self.toggle_recording)
@@ -207,6 +216,36 @@ class WhisperFlowApp:
         self.signals.paste_completed.connect(self._on_paste_completed)
         self.signals.mouse_clicked.connect(self._on_mouse_clicked)
         self.signals.focus_changed.connect(self._on_focus_changed)
+
+    @Slot(str)
+    def _on_engine_changed(self, mode: str):
+        self.config["engine_mode"] = mode
+        save_config(self.config)
+        if self.whisper_engine:
+            self.whisper_engine.engine_mode = mode
+        cur_lang = self.config.get("language_mode", "hinglish")
+        cur_style = self.voice_profile.get_active_style()
+        self.widget.update_status_badges(mode, cur_lang, cur_style)
+        self._sync_tray_engine_and_lang()
+
+    @Slot(str)
+    def _on_language_changed(self, lang: str):
+        self.config["language_mode"] = lang
+        save_config(self.config)
+        cur_engine = self.config.get("engine_mode", "groq")
+        cur_style = self.voice_profile.get_active_style()
+        self.widget.update_status_badges(cur_engine, lang, cur_style)
+        self._sync_tray_engine_and_lang()
+
+    @Slot(str)
+    def _on_style_changed(self, style: str):
+        self.voice_profile.set_active_style(style)
+        cur_engine = self.config.get("engine_mode", "groq")
+        cur_lang = self.config.get("language_mode", "hinglish")
+        self.widget.update_status_badges(cur_engine, cur_lang, style)
+        if hasattr(self, 'style_action_group'):
+            for k, a in self.style_action_group.items():
+                a.setChecked(k == style)
 
     def _on_uia_focus_changed(self):
         """Called from UIA background COM worker thread when focus changes."""
@@ -356,6 +395,32 @@ class WhisperFlowApp:
 
         self.auto_show_action.triggered.connect(_on_toggle_auto_show)
 
+        # Direct Engine Toggle Submenu (Groq Cloud / Local CPU)
+        engine_menu = tray_menu.addMenu("Engine Mode")
+        self.engine_action_group = {}
+        cur_engine = self.config.get("engine_mode", "groq")
+        for e_label, e_key in [("Groq Cloud (0% CPU)", "groq"), ("Local CPU (int8 Offline)", "local")]:
+            act = engine_menu.addAction(e_label)
+            act.setCheckable(True)
+            act.setChecked(e_key == cur_engine)
+            def _make_e_h(k=e_key):
+                return lambda: self._on_engine_changed(k)
+            act.triggered.connect(_make_e_h(e_key))
+            self.engine_action_group[e_key] = act
+
+        # Direct Language Toggle Submenu (Hinglish / English)
+        lang_menu = tray_menu.addMenu("Language Mode")
+        self.lang_action_group = {}
+        cur_lang = self.config.get("language_mode", "hinglish")
+        for l_label, l_key in [("Hinglish (Hindi + English)", "hinglish"), ("English Only", "en")]:
+            act = lang_menu.addAction(l_label)
+            act.setCheckable(True)
+            act.setChecked(l_key == cur_lang)
+            def _make_l_h(k=l_key):
+                return lambda: self._on_language_changed(k)
+            act.triggered.connect(_make_l_h(l_key))
+            self.lang_action_group[l_key] = act
+
         # Speech Style Submenu
         style_menu = tray_menu.addMenu("Speech Style")
         self.style_action_group = {}
@@ -397,6 +462,16 @@ class WhisperFlowApp:
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.activated.connect(self._on_tray_activated)
         self.tray_icon.show()
+
+    def _sync_tray_engine_and_lang(self):
+        cur_engine = self.config.get("engine_mode", "groq")
+        cur_lang = self.config.get("language_mode", "hinglish")
+        if hasattr(self, 'engine_action_group'):
+            for k, a in self.engine_action_group.items():
+                a.setChecked(k == cur_engine)
+        if hasattr(self, 'lang_action_group'):
+            for k, a in self.lang_action_group.items():
+                a.setChecked(k == cur_lang)
 
     def manual_show_widget(self):
         """Explicitly shows and raises the widget upon manual user request."""
@@ -582,6 +657,9 @@ class WhisperFlowApp:
 
                 dlg = SettingsDialog(self.config, self.audio_engine, self.whisper_engine, parent=None)
                 self.active_dialog = dlg
+                dlg.engine_changed.connect(self._on_engine_changed)
+                dlg.language_changed.connect(self._on_language_changed)
+                dlg.style_changed.connect(self._on_style_changed)
 
                 if bring_to_front:
                     try:
@@ -610,9 +688,17 @@ class WhisperFlowApp:
                     if hasattr(self, 'auto_show_action'):
                         self.auto_show_action.setChecked(self.auto_show_on_textbox)
                     self.visibility_debounce_timer.start(50)
-                    if self.whisper_engine.model_name != self.config.get("model_name"):
-                        self.whisper_engine = WhisperEngine.get_instance(self.config.get("model_name"))
-                        threading.Thread(target=self._prewarm_model, daemon=True).start()
+                    if self.whisper_engine:
+                        self.whisper_engine.engine_mode = self.config.get("engine_mode", "groq")
+                        if self.whisper_engine.model_name != self.config.get("model_name"):
+                            self.whisper_engine = WhisperEngine.get_instance(self.config.get("model_name"))
+                            threading.Thread(target=self._prewarm_model, daemon=True).start()
+                    self.widget.update_status_badges(
+                        self.config.get("engine_mode", "groq"),
+                        self.config.get("language_mode", "hinglish"),
+                        self.voice_profile.get_active_style()
+                    )
+                    self._sync_tray_engine_and_lang()
             finally:
                 self.active_dialog = None
                 self.is_dialog_open = False

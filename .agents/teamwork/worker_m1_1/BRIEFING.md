@@ -1,7 +1,7 @@
-# BRIEFING — 2026-10-15T15:21:00Z
+# BRIEFING — 2026-10-22T10:20:00Z
 
 ## Mission
-Implement bilingual calibration and phonetic mapping engine (calibration_engine.py), update voice_profile.py with lookaround regex boundaries and safe initial_prompt, integrate 100-sentence dataset and automated misheard pair registration into ui/voice_training_dialog.py, and verify data/calibration_sentences.json.
+Implement two-stage Hinglish speech transcription and styling pipeline in Whisper Flow: Stage 1 acoustic capture with anti-translation and resilient Groq/CPU failover in `whisper_engine.py`, Stage 2 fast Romanizer with anti-translation prompt and sub-0.01ms CPU Romanizer in `style_engine.py`, structured context and deterministic 100% dictionary post-pass in `voice_profile.py`, config updates in `config.py` and `config.json`, and text cleaner verification in `text_cleaner.py`.
 
 ## 🔒 My Identity
 - Archetype: teamwork_preview_worker
@@ -9,6 +9,8 @@ Implement bilingual calibration and phonetic mapping engine (calibration_engine.
 - Working directory: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\worker_m1_1
 - Original parent: 594ef618-48c0-4063-b24e-931d4cc7a88e
 - Milestone: M1 (Bilingual Calibration & Phonetic Mapper)
+- Round 2 Parent: b7127cef-b446-4dca-a8e7-b0da25424e7e
+- Round 2 Milestone: M1 (Two-Stage Hinglish Pipeline Worker)
 
 ## 🔒 Key Constraints
 - Exclusively own: calibration_engine.py, voice_profile.py, ui/voice_training_dialog.py, data/calibration_sentences.json.
@@ -19,22 +21,30 @@ Implement bilingual calibration and phonetic mapping engine (calibration_engine.
 - Auto-register clean phonetic pairs into voice_profile.json.
 - Load all 100 bilingual sentences in VoiceTrainingDialog.
 - DO NOT CHEAT: genuine implementations only, no dummy facades or hardcoded values.
+- Round 2 Exclusive write ownership: config.py, config.json, whisper_engine.py, style_engine.py, text_cleaner.py, voice_profile.py.
+- Round 2 Integrity Mandate: No hardcoding test results, no dummy facades, genuine implementations only.
+- Groq /audio/transcriptions endpoint only, 5s timeout, User-Agent: WhisperFlow.
+- Local CPU base int8 failover on missing key, 401, 429, timeout, or local engine_mode.
+- Model name sanitization: replace any .en suffix with base.
+- Anti-translation prompt for llama-3.3-70b-versatile.
+- Pure Python FastDevanagariRomanizer with 200+ word dictionary + transliterator with schwa deletion (<0.01ms, 0 GPU VRAM).
+- Deterministic 100% dictionary match guarantee in voice_profile.py via regex post-pass.
 
 ## Current Parent
-- Conversation ID: 594ef618-48c0-4063-b24e-931d4cc7a88e
-- Updated: 2026-10-15T15:21:00Z
+- Conversation ID: b7127cef-b446-4dca-a8e7-b0da25424e7e
+- Updated: 2026-10-22T10:20:00Z
 
 ## Task Summary
-- **What to build**: Standalone calibration_engine.py, lookaround regex & initial_prompt in voice_profile.py, 100-sentence calibration in ui/voice_training_dialog.py with auto-registration of phonetic pairs, and verify data/calibration_sentences.json.
-- **Success criteria**: All 100 sentences load, accuracy diff works cleanly without punctuation leaks, auto-registration adds clean pairs, regex replaces keys with punctuation, and tests pass.
-- **Interface contracts**: PROJECT.md § Interface Contracts (calibration_engine.py ↔ ui/voice_training_dialog.py & studio_server.py; voice_profile.py ↔ whisper_engine.py).
-- **Code layout**: PROJECT.md § Code Layout.
+- **What to build**: Two-stage speech transcription and styling pipeline: config updates, `transcribe_stage1` and 3-stage coordination in `whisper_engine.py`, `format_two_stage` with Groq Cloud prompt and local `FastDevanagariRomanizer` in `style_engine.py`, `get_stage2_context` and 100% dictionary guarantee in `voice_profile.py`, and `text_cleaner.py` verification.
+- **Success criteria**: All unittests pass, Devanagari is Romanized to Latin Hinglish, no English translation of Hindi speech, technical words preserved, 100% dictionary match, sub-350ms cloud latency, zero-crash CPU fallback.
+- **Interface contracts**: PROJECT.md lines 69-77, 85-88.
+- **Code layout**: config.py, config.json, whisper_engine.py, style_engine.py, text_cleaner.py, voice_profile.py.
 
 ## Key Decisions Made
-- Created pure `calibration_engine.py` with zero heavy dependencies, supporting SequenceMatcher diffing, clamped accuracy (0.0-100.0), punctuation-clean misheard pairs (`strip_punctuation`), dataset loading with path fallbacks, and idempotent `auto_register_misheard_pairs`.
-- Fixed `voice_profile.py` `apply_replacements` using conditional lookarounds `(?<!\w)` on start and `(?!\w)` on end, enabling clean matching of keys with trailing punctuation (e.g., `'cooper nets,'` -> `'Kubernetes'`).
-- Added token budget truncation (`max_chars=800`) to `VoiceProfileManager.get_initial_prompt()` to safely fit Whisper context window limit (~224 tokens).
-- Integrated `load_calibration_dataset()` into `ui/voice_training_dialog.py`, adding category filtering (`All (100)`, `English (50)`, `Hindi / Hinglish (50)`), sentence navigation, real-time diffing via `compute_diff`, and auto-registration of misheard phonetic pairs.
+- [Round 2] Update `config.py` and `config.json` with `"engine_mode": "groq"`, `"language_mode": "hinglish"`, and default model `"base"`.
+- [Round 2] Implement `transcribe_stage1` in `whisper_engine.py` with Groq `/audio/transcriptions`, 5.0s timeout, User-Agent `WhisperFlow`, auto language detection, and automatic CPU int8 fallback.
+- [Round 2] Implement `FastDevanagariRomanizer` (200+ dictionary + transliterator with schwa deletion) and `format_two_stage` in `style_engine.py`.
+- [Round 2] Implement `get_stage2_context`, enhanced `get_initial_prompt`, and enhanced `apply_replacements` with custom_words casing normalization in `voice_profile.py`.
 
 ## Artifact Index
 - DISPATCH.md — Assignment instructions
@@ -44,17 +54,20 @@ Implement bilingual calibration and phonetic mapping engine (calibration_engine.
 
 ## Change Tracker
 - **Files modified**:
-  - `calibration_engine.py`: Created pure diffing and calibration module.
-  - `voice_profile.py`: Lookaround regex boundaries and initial_prompt truncation.
-  - `ui/voice_training_dialog.py`: 100-sentence bilingual calibration, category filtering, diffing, auto-registration.
-  - `data/calibration_sentences.json`: Verified 100 sentences (50 English, 50 Hindi/Hinglish).
-- **Build status**: PASS (all modules compile cleanly, 14/14 calibration tests pass)
+  - `config.py`: Added `"engine_mode": "groq"` and `"language_mode": "hinglish"` to `DEFAULT_CONFIG`.
+  - `config.json`: Updated `"model_name": "base"`, `"engine_mode": "groq"`, `"language_mode": "hinglish"`.
+  - `whisper_engine.py`: Model sanitization (.en -> base), `transcribe_stage1` with Groq 5s timeout, User-Agent `WhisperFlow`, local CPU int8 failover, and 3-stage coordination in `transcribe()`.
+  - `style_engine.py`: `FastDevanagariRomanizer` with 220+ word dictionary, DIGITS transliteration, schwa deletion, `format_two_stage` with Llama-3.3-70b prompt, 401 circuit breaker, and style enforcement.
+  - `voice_profile.py`: `get_stage2_context` XML blocks, 800-char bounded `get_initial_prompt` with replacement targets, and deterministic 100% dictionary regex post-pass in `apply_replacements`.
+  - `text_cleaner.py`: Verified `format_casual_chat` preserves Hinglish while cleaning formal trailing punctuation.
+- **Build status**: PASS (161/161 unit tests, 20/20 benchmark cases)
 - **Pending issues**: None
 
 ## Quality Status
-- **Build/test result**: 14/14 passed in `tests/test_speech_calibration.py` (0.005s)
-- **Lint status**: 0 warnings, clean py_compile
-- **Tests added/modified**: Full integration and edge case validation
+- **Build/test result**: 161/161 unit tests passed in 3.278s (`discover tests`). 42/42 targeted M1 tests passed in 0.142s (`test_whisper_engine.py`, `test_style_engine.py`, `test_hinglish_pipeline.py`).
+- **Benchmark result**: 20/20 Hinglish test cases passed in 6.53ms mean CPU latency (<200ms budget, 0 MB GPU VRAM).
+- **Lint status**: Clean; no new warnings or syntax errors.
+- **Tests added/modified**: Verified all suites in `tests/`.
 
 ## Loaded Skills
 - None

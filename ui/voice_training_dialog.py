@@ -10,11 +10,105 @@ from PySide6.QtCore import Qt, QTimer, Signal, QSize
 from PySide6.QtGui import QFont, QColor
 from voice_profile import VoiceProfileManager
 from ui.theme_helper import apply_dark_window_attributes
-from ui.settings_dialog import WordRowWidget
+from ui.settings_dialog import WordRowWidget, ReplacementRowWidget
+from style_engine import FastDevanagariRomanizer
 from calibration_engine import load_calibration_dataset, compute_diff, auto_register_misheard_pairs
 
 CALIBRATION_DATASET = load_calibration_dataset()
 CALIBRATION_SENTENCES = [s["text"] for s in CALIBRATION_DATASET]
+
+
+class PhoneticPairChip(QWidget):
+    """
+    Candidate confirmation chip for misheard phonetic pairs during voice calibration.
+    Supports 1-click permanent registration to VoiceProfileManager or 1-click dismissal.
+    """
+    def __init__(self, heard: str, target: str, on_confirm=None, on_dismiss=None, parent=None):
+        super().__init__(parent)
+        self.heard = heard
+        self.target = target
+        self.on_confirm = on_confirm
+        self.on_dismiss = on_dismiss
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 4, 8, 4)
+        layout.setSpacing(8)
+
+        self.setStyleSheet("""
+            PhoneticPairChip {
+                background-color: #1e293b;
+                border: 1px solid #334155;
+                border-radius: 6px;
+            }
+        """)
+
+        self.label = QLabel(f"'{heard}' → '{target}'")
+        self.label.setStyleSheet("""
+            color: #f1f5f9;
+            font-size: 12px;
+            font-weight: 500;
+        """)
+        layout.addWidget(self.label)
+
+        self.btn_confirm = QPushButton("+ Remember")
+        self.btn_confirm.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_confirm.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: #ffffff;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2563eb;
+            }
+            QPushButton:disabled {
+                background-color: #059669;
+                color: #ecfdf5;
+            }
+        """)
+        self.btn_confirm.clicked.connect(self._handle_confirm)
+        layout.addWidget(self.btn_confirm)
+
+        self.btn_dismiss = QPushButton("✕")
+        self.btn_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_dismiss.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #94a3b8;
+                border: 1px solid #475569;
+                border-radius: 4px;
+                padding: 3px 6px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #ef4444;
+                color: #ffffff;
+                border-color: #dc2626;
+            }
+        """)
+        self.btn_dismiss.clicked.connect(self._handle_dismiss)
+        layout.addWidget(self.btn_dismiss)
+
+    def _handle_confirm(self):
+        try:
+            VoiceProfileManager.get_instance().add_replacement(self.heard, self.target)
+        except Exception:
+            pass
+        if callable(self.on_confirm):
+            self.on_confirm(self.heard, self.target)
+        self.btn_confirm.setText("✓ Remembered")
+        self.btn_confirm.setEnabled(False)
+
+    def _handle_dismiss(self):
+        if callable(self.on_dismiss):
+            self.on_dismiss(self.heard, self.target)
+        self.hide()
+
 
 class VoiceTrainingDialog(QDialog):
     calibration_completed = Signal()
@@ -127,6 +221,7 @@ class VoiceTrainingDialog(QDialog):
 
         # Stacked Pages
         self.stack = QStackedWidget()
+        self.stack.currentChanged.connect(self._on_page_changed)
         layout.addWidget(self.stack)
 
         self.page_noise = self._create_noise_page()
@@ -136,6 +231,12 @@ class VoiceTrainingDialog(QDialog):
         self.stack.addWidget(self.page_noise)
         self.stack.addWidget(self.page_speech)
         self.stack.addWidget(self.page_review)
+
+    def _on_page_changed(self, idx):
+        if idx == 2:
+            self._update_review_summary()
+            self._refresh_word_list()
+            self._refresh_replacements_list()
 
     def _create_noise_page(self):
         page = QWidget()
@@ -285,6 +386,14 @@ class VoiceTrainingDialog(QDialog):
         self.diff_status.setWordWrap(True)
         l.addWidget(self.diff_status)
 
+        # Chips container for candidate confirmation chips
+        self.chips_container = QWidget()
+        self.chips_layout = QHBoxLayout(self.chips_container)
+        self.chips_layout.setContentsMargins(0, 4, 0, 4)
+        self.chips_layout.setSpacing(8)
+        self.chips_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        l.addWidget(self.chips_container)
+
         l.addStretch()
 
         # Nav & Record Buttons Row
@@ -313,6 +422,14 @@ class VoiceTrainingDialog(QDialog):
         self._update_sentence_view()
         return page
 
+    def _clear_chips(self):
+        if hasattr(self, "chips_layout") and self.chips_layout is not None:
+            while self.chips_layout.count():
+                item = self.chips_layout.takeAt(0)
+                w = item.widget()
+                if w is not None:
+                    w.deleteLater()
+
     def _on_category_changed(self, idx):
         if idx == 1:
             self.filtered_dataset = [s for s in self.calibration_dataset if s.get("category") == "english"]
@@ -334,6 +451,7 @@ class VoiceTrainingDialog(QDialog):
     def _update_sentence_view(self):
         if not self.filtered_dataset:
             return
+        self._clear_chips()
         self.current_sentence_idx = max(0, min(self.current_sentence_idx, len(self.filtered_dataset) - 1))
         item = self.filtered_dataset[self.current_sentence_idx]
         cat = item.get("category", "")
@@ -364,6 +482,8 @@ class VoiceTrainingDialog(QDialog):
 
     def _jump_to_review(self):
         self._update_review_summary()
+        self._refresh_word_list()
+        self._refresh_replacements_list()
         self.stack.setCurrentIndex(2)
 
     def _on_speech_finished(self, data):
@@ -379,7 +499,7 @@ class VoiceTrainingDialog(QDialog):
             target_text = target_item.get("text", "")
             keywords = target_item.get("phonetic_keywords", [])
             diff_res = compute_diff(target_text, text, keywords)
-            newly_added = auto_register_misheard_pairs(diff_res.get("misheard_pairs", []), self.profile_mgr)
+            newly_added = 0
 
         self.calibrated_wpm = wpm
         accuracy = diff_res.get("accuracy", 100.0)
@@ -387,15 +507,45 @@ class VoiceTrainingDialog(QDialog):
 
         self.transcribed_preview.setText(f'Whisper heard: "{text}"  |  Accuracy: {accuracy:.1f}% ({self.calibrated_wpm} WPM)')
 
+        # Clear old chips
+        self._clear_chips()
+
         if misheard:
             pairs_str = ", ".join(f"'{p['heard']}' -> '{p['target']}'" for p in misheard)
             if newly_added > 0:
                 self.diff_status.setText(f"Auto-registered {newly_added} phonetic correction(s): {pairs_str}")
                 self.diff_status.setStyleSheet("color: #38bdf8; font-size: 11px; font-weight: bold;")
+                self.auto_registered_count += newly_added
             else:
-                self.diff_status.setText(f"Phonetic replacement(s) active: {pairs_str}")
-                self.diff_status.setStyleSheet("color: #94a3b8; font-size: 11px;")
-            self.auto_registered_count += newly_added
+                self.diff_status.setText("Candidate phonetic correction(s) detected — click '+ Remember' to save:")
+                self.diff_status.setStyleSheet("color: #38bdf8; font-size: 11px; font-weight: bold;")
+
+            for p in misheard:
+                h = p.get("heard", "").strip()
+                t = p.get("target", "").strip()
+                if not h or not t:
+                    continue
+
+                def make_callbacks(heard_word, target_word):
+                    def on_confirm(hw, tw):
+                        self.profile_mgr.add_replacement(hw, tw)
+                        self.auto_registered_count += 1
+                        self.diff_status.setText(f"Remembered phonetic mapping: '{hw}' → '{tw}'")
+                        self.diff_status.setStyleSheet("color: #34d399; font-size: 11px; font-weight: bold;")
+                        self._update_review_summary()
+
+                    def on_dismiss(hw, tw):
+                        pass
+
+                    return on_confirm, on_dismiss
+
+                on_conf, on_dism = make_callbacks(h, t)
+                chip = PhoneticPairChip(h, t, on_confirm=on_conf, on_dismiss=on_dism)
+                if self.profile_mgr.get_replacements().get(h.lower()) == t:
+                    chip.btn_confirm.setText("✓ Remembered")
+                    chip.btn_confirm.setEnabled(False)
+                self.chips_layout.addWidget(chip)
+
         elif accuracy >= 95.0:
             self.diff_status.setText("Excellent pronunciation! Clean match with target.")
             self.diff_status.setStyleSheet("color: #34d399; font-size: 11px; font-weight: bold;")
@@ -438,6 +588,10 @@ class VoiceTrainingDialog(QDialog):
             def transcribe():
                 prompt = self.profile_mgr.get_initial_prompt()
                 text = self.whisper_engine.transcribe(audio, initial_prompt=prompt)
+
+                if target_item.get("category") == "hindi_hinglish" and FastDevanagariRomanizer.has_devanagari(text):
+                    text = FastDevanagariRomanizer.romanize(text)
+
                 words_count = len(text.split())
                 wpm = int((words_count / duration) * 60)
                 calibrated_wpm = max(80, min(220, wpm))
@@ -446,13 +600,12 @@ class VoiceTrainingDialog(QDialog):
                 keywords = target_item.get("phonetic_keywords", [])
 
                 diff_res = compute_diff(target_text, text, keywords)
-                newly_added = auto_register_misheard_pairs(diff_res.get("misheard_pairs", []), self.profile_mgr)
 
                 payload = {
                     "text": text,
                     "wpm": calibrated_wpm,
                     "diff_res": diff_res,
-                    "newly_added": newly_added
+                    "newly_added": 0
                 }
                 self._speech_finished.emit(payload)
 
@@ -463,7 +616,7 @@ class VoiceTrainingDialog(QDialog):
             f"✓ Room Acoustics: Calibrated ({self.calibrated_noise} RMS)\n"
             f"✓ Voice Cadence: Normal (~{self.calibrated_wpm} WPM)\n"
             f"✓ Sentences Calibrated: {len(self.transcribed_sentences)}\n"
-            f"✓ Phonetic Mappings Registered: {self.auto_registered_count}\n"
+            f"✓ Phonetic Mappings Registered: {len(self.profile_mgr.get_replacements())}\n"
             f"✓ Whisper Biasing: Active ({len(self.profile_mgr.get_custom_words())} words)"
         )
         if hasattr(self, "review_summary_box"):
@@ -472,7 +625,7 @@ class VoiceTrainingDialog(QDialog):
     def _create_review_page(self):
         page = QWidget()
         l = QVBoxLayout(page)
-        l.setSpacing(12)
+        l.setSpacing(10)
         l.setContentsMargins(0, 0, 0, 0)
 
         step_lbl = QLabel("Step 3: Calibration Complete & Custom Vocabulary")
@@ -491,25 +644,52 @@ class VoiceTrainingDialog(QDialog):
         """)
         l.addWidget(self.review_summary_box)
 
-        lbl = QLabel("Quick-Add Custom Words or Names (never mishear these again):")
-        l.addWidget(lbl)
+        # Side-by-side columns: Custom Words (left) and Calibrated Phonetic Mappings (right)
+        lists_row = QHBoxLayout()
+        lists_row.setSpacing(12)
+
+        # Left Column: Custom Words
+        left_col = QVBoxLayout()
+        left_col.setSpacing(6)
+        words_hdr = QLabel("Custom Vocabulary:")
+        words_hdr.setStyleSheet("color: #cbd5e1; font-weight: bold; font-size: 12px;")
+        left_col.addWidget(words_hdr)
 
         add_row = QHBoxLayout()
         self.custom_word_input = QLineEdit()
-        self.custom_word_input.setPlaceholderText("Type word or name and press Enter to add...")
+        self.custom_word_input.setPlaceholderText("Add word or name...")
         self.custom_word_input.returnPressed.connect(self._add_word_from_input)
         add_row.addWidget(self.custom_word_input)
 
-        add_btn = QPushButton("+ Add Word")
+        add_btn = QPushButton("+ Add")
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.setStyleSheet("padding: 6px 12px; font-size: 12px;")
         add_btn.clicked.connect(self._add_word_from_input)
         add_row.addWidget(add_btn)
-        l.addLayout(add_row)
+        left_col.addLayout(add_row)
 
         self.word_list = QListWidget()
-        self.word_list.setFixedHeight(140)
-        self._refresh_word_list()
-        l.addWidget(self.word_list)
+        self.word_list.setFixedHeight(135)
+        left_col.addWidget(self.word_list)
+        lists_row.addLayout(left_col)
+
+        # Right Column: Calibrated Phonetic Mappings
+        right_col = QVBoxLayout()
+        right_col.setSpacing(6)
+        reps_hdr = QLabel("Calibrated Phonetic Mappings:")
+        reps_hdr.setStyleSheet("color: #cbd5e1; font-weight: bold; font-size: 12px;")
+        right_col.addWidget(reps_hdr)
+
+        reps_sub = QLabel("Heard → Target (1-click removal):")
+        reps_sub.setStyleSheet("color: #94a3b8; font-size: 11px; font-style: italic; min-height: 29px;")
+        right_col.addWidget(reps_sub)
+
+        self.replacements_list = QListWidget()
+        self.replacements_list.setFixedHeight(135)
+        right_col.addWidget(self.replacements_list)
+        lists_row.addLayout(right_col)
+
+        l.addLayout(lists_row)
 
         btn_row = QHBoxLayout()
         finish_btn = QPushButton("Finish & Save Profile")
@@ -527,10 +707,12 @@ class VoiceTrainingDialog(QDialog):
             self.profile_mgr.add_custom_word(text)
             self.custom_word_input.clear()
             self._refresh_word_list()
+            self._update_review_summary()
 
     def _on_remove_word(self, word: str):
         self.profile_mgr.remove_custom_word(word)
         self._refresh_word_list()
+        self._update_review_summary()
 
     def _refresh_word_list(self):
         self.word_list.clear()
@@ -539,6 +721,19 @@ class VoiceTrainingDialog(QDialog):
             item.setSizeHint(QSize(0, 36))
             row_widget = WordRowWidget(w, on_remove_callback=self._on_remove_word)
             self.word_list.setItemWidget(item, row_widget)
+
+    def _refresh_replacements_list(self):
+        self.replacements_list.clear()
+        for heard, target in self.profile_mgr.get_replacements().items():
+            item = QListWidgetItem(self.replacements_list)
+            item.setSizeHint(QSize(0, 36))
+            row_widget = ReplacementRowWidget(heard, target, on_remove_callback=self._on_remove_replacement)
+            self.replacements_list.setItemWidget(item, row_widget)
+
+    def _on_remove_replacement(self, heard: str):
+        self.profile_mgr.remove_replacement(heard)
+        self._refresh_replacements_list()
+        self._update_review_summary()
 
     def _finish_and_save(self):
         settings = {

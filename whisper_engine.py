@@ -45,30 +45,41 @@ class WhisperEngine:
     _instance = None
     _lock = threading.Lock()
 
-    def __init__(self, model_name=None, device=None, compute_type=None, groq_api_key=None):
+    def __init__(self, model_name=None, device=None, compute_type=None, groq_api_key=None, engine_mode=None):
         cfg = load_config()
-        self.model_name = model_name or cfg.get("model_name", "base")
+        # Enforce multilingual 'base' model - sanitize any English-only '.en' suffix
+        raw_model = model_name or cfg.get("model_name", "base")
+        self.model_name = "base" if raw_model.endswith(".en") else raw_model
+
         self.device = device or cfg.get("device", "cpu")
         self.compute_type = compute_type or cfg.get("compute_type", "int8")
         self.groq_api_key = groq_api_key if groq_api_key is not None else cfg.get("groq_api_key", "")
+        self.engine_mode = engine_mode or cfg.get("engine_mode", "groq")
         self.model = None
         self.is_loading = False
         self._load_lock = threading.Lock()
 
     @classmethod
-    def get_instance(cls, model_name=None, device=None, compute_type=None, groq_api_key=None):
+    def get_instance(cls, model_name=None, device=None, compute_type=None, groq_api_key=None, engine_mode=None):
         with cls._lock:
             if cls._instance is None:
                 cls._instance = cls(
                     model_name=model_name,
                     device=device,
                     compute_type=compute_type,
-                    groq_api_key=groq_api_key
+                    groq_api_key=groq_api_key,
+                    engine_mode=engine_mode
                 )
             else:
-                if model_name is not None and cls._instance.model_name != model_name:
-                    cls._instance.model_name = model_name
+                if model_name is not None:
+                    clean_name = "base" if model_name.endswith(".en") else model_name
+                    if cls._instance.model_name != clean_name:
+                        cls._instance.model_name = clean_name
+                        cls._instance.model = None
+                elif cls._instance.model_name.endswith(".en"):
+                    cls._instance.model_name = "base"
                     cls._instance.model = None
+
                 if device is not None and cls._instance.device != device:
                     cls._instance.device = device
                     cls._instance.model = None
@@ -77,6 +88,8 @@ class WhisperEngine:
                     cls._instance.model = None
                 if groq_api_key is not None:
                     cls._instance.groq_api_key = groq_api_key
+                if engine_mode is not None:
+                    cls._instance.engine_mode = engine_mode
             return cls._instance
 
     def load_model(self):
@@ -172,9 +185,9 @@ class WhisperEngine:
             pass
         return 0.0
 
-    def _transcribe_groq(self, audio_data, api_key, sample_rate=16000, initial_prompt=None):
+    def _transcribe_groq(self, audio_data, api_key, sample_rate=16000, initial_prompt=None, language=None):
         """
-        Cloud speech API fallback method using Groq's cloud Whisper API endpoint:
+        Cloud speech API method using Groq's cloud Whisper API endpoint:
         https://api.groq.com/openai/v1/audio/transcriptions with model whisper-large-v3-turbo.
         Guarantees sub-100ms transcription with 0% CPU and 0% GPU.
         """
@@ -183,9 +196,8 @@ class WhisperEngine:
 
         # Normalize audio if needed
         max_val = np.max(np.abs(audio_data))
-        if max_val > 0.001:
-            if max_val > 1.0:
-                audio_data = audio_data / max_val
+        if max_val > 0.001 and max_val > 1.0:
+            audio_data = audio_data / max_val
 
         # Convert float32 array to 16-bit PCM WAV in memory
         int16_data = np.clip(audio_data * 32767.0, -32768, 32767).astype(np.int16)
@@ -209,6 +221,10 @@ class WhisperEngine:
         if initial_prompt:
             add_field("prompt", initial_prompt)
 
+        # Omit language field if None/auto/hinglish so Whisper auto-detects English vs Hindi phonemes
+        if language and language.lower() not in ("auto", "none", "hinglish"):
+            add_field("language", language.lower())
+
         # Audio file field
         body_parts.append(f"--{boundary}\r\n".encode("utf-8"))
         body_parts.append(b'Content-Disposition: form-data; name="file"; filename="audio.wav"\r\n')
@@ -219,6 +235,7 @@ class WhisperEngine:
         body_parts.append(f"--{boundary}--\r\n".encode("utf-8"))
         payload = b"".join(body_parts)
 
+        # Strictly hitting /audio/transcriptions (never /audio/translations)
         req = urllib.request.Request(
             "https://api.groq.com/openai/v1/audio/transcriptions",
             data=payload,
@@ -230,7 +247,7 @@ class WhisperEngine:
             method="POST"
         )
 
-        with urllib.request.urlopen(req, timeout=10.0) as resp:
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
             status_code = getattr(resp, "status", 200)
             if status_code != 200:
                 raise RuntimeError(f"Groq API returned HTTP status {status_code}")
@@ -240,25 +257,9 @@ class WhisperEngine:
                 raise RuntimeError(f"Groq API returned error: {resp_data['error']}")
             return resp_data.get("text", "").strip()
 
-    def transcribe(self, audio_data, sample_rate=16000, initial_prompt=None, remove_trailing_stop=False):
-        """
-        Transcribes audio_data (1D numpy float32 array).
-        Returns the formatted transcribed text.
-        """
+    def _transcribe_local(self, audio_data, initial_prompt=None, language=None):
         if len(audio_data) == 0:
             return ""
-
-        # Cloud speech API fallback: If groq_api_key is present in config, transcribe via Groq
-        cfg = load_config()
-        groq_key = (getattr(self, "groq_api_key", "") or cfg.get("groq_api_key", "")).strip()
-        if groq_key:
-            try:
-                full_text = self._transcribe_groq(audio_data, groq_key, sample_rate=sample_rate, initial_prompt=initial_prompt)
-                if remove_trailing_stop and full_text:
-                    full_text = self.clean_stop_keyword(full_text)
-                return full_text
-            except Exception as e:
-                print(f"[WhisperEngine] Groq API transcription failed: {e}. Falling back to local model.")
 
         if self.model is None:
             self.load_model()
@@ -273,13 +274,16 @@ class WhisperEngine:
 
         # Normalize audio if needed
         max_val = np.max(np.abs(audio_data))
-        if max_val > 0.001:
-            # Don't let clipping distort, but ensure good signal amplitude
-            if max_val > 1.0:
-                audio_data = audio_data / max_val
+        if max_val > 0.001 and max_val > 1.0:
+            audio_data = audio_data / max_val
 
+        model_lang = None if (not language or language.lower() in ("auto", "none", "hinglish")) else language.lower()
+
+        # Explicitly pass task="transcribe" to forbid translation
         segments, info = self.model.transcribe(
             audio_data,
+            task="transcribe",
+            language=model_lang,
             initial_prompt=initial_prompt,
             beam_size=1,
             best_of=1,
@@ -293,12 +297,117 @@ class WhisperEngine:
         for segment in segments:
             text_pieces.append(segment.text.strip())
 
-        full_text = " ".join(text_pieces).strip()
+        return " ".join(text_pieces).strip()
 
-        if remove_trailing_stop and full_text:
-            full_text = self.clean_stop_keyword(full_text)
+    def transcribe_stage1(
+        self,
+        audio_data,
+        sample_rate=16000,
+        initial_prompt=None,
+        language=None,
+        engine_mode=None
+    ):
+        """
+        Stage 1: Acoustic Capture.
+        Transcribes spoken audio into raw transcript without forced English translation.
+        Routes to Groq Cloud (whisper-large-v3-turbo) or local CPU int8 (base model).
+        """
+        if len(audio_data) == 0:
+            return ""
 
-        return full_text
+        cfg = load_config()
+        active_mode = (engine_mode or getattr(self, "engine_mode", None) or cfg.get("engine_mode", "groq")).lower()
+        groq_key = (getattr(self, "groq_api_key", "") or cfg.get("groq_api_key", "")).strip()
+
+        # If engine_mode == "groq" and API key is present, attempt Groq Cloud
+        if active_mode != "local" and groq_key:
+            try:
+                return self._transcribe_groq(
+                    audio_data,
+                    api_key=groq_key,
+                    sample_rate=sample_rate,
+                    initial_prompt=initial_prompt,
+                    language=language
+                )
+            except Exception as e:
+                print(f"[WhisperEngine] Groq API transcription failed: {e}. Falling back to local model.")
+
+        # Fallback to local CPU int8 model
+        return self._transcribe_local(
+            audio_data,
+            initial_prompt=initial_prompt,
+            language=language
+        )
+
+    def transcribe(
+        self,
+        audio_data,
+        sample_rate=16000,
+        initial_prompt=None,
+        style=None,
+        language=None,
+        engine_mode=None,
+        remove_trailing_stop=False
+    ):
+        """
+        Coordinates full two-stage transcription pipeline:
+        Stage 1 (Acoustic Capture) -> Stage 2 (Fast Romanizer & Stylist) -> Stage 3 (Deterministic Dict Guarantee).
+        """
+        if len(audio_data) == 0:
+            return ""
+
+        # Stage 1: Acoustic Capture
+        raw_text = self.transcribe_stage1(
+            audio_data=audio_data,
+            sample_rate=sample_rate,
+            initial_prompt=initial_prompt,
+            language=language,
+            engine_mode=engine_mode
+        )
+
+        if remove_trailing_stop and raw_text:
+            raw_text = self.clean_stop_keyword(raw_text)
+
+        if not raw_text:
+            return ""
+
+        # Stage 2: Fast Romanizer & Stylist
+        if style is not None:
+            try:
+                from voice_profile import VoiceProfileManager
+                from style_engine import StyleEngine
+
+                profile_mgr = VoiceProfileManager.get_instance()
+                style_eng = StyleEngine.get_instance()
+
+                formatted_text = style_eng.format_two_stage(
+                    raw_text,
+                    style=style,
+                    voice_profile=profile_mgr,
+                    engine_mode=engine_mode
+                )
+            except Exception as e:
+                print(f"[WhisperEngine] Stage 2 formatting failed: {e}. Falling back to raw text.")
+                formatted_text = raw_text
+        else:
+            # When style is None, Romanize any Devanagari script to Latin Hinglish
+            try:
+                from style_engine import FastDevanagariRomanizer
+                if FastDevanagariRomanizer.has_devanagari(raw_text):
+                    raw_text = FastDevanagariRomanizer.romanize(raw_text)
+            except Exception:
+                pass
+            formatted_text = raw_text
+
+        # Stage 3: Deterministic Exact Match Dictionary Guarantee
+        try:
+            from voice_profile import VoiceProfileManager
+            profile_mgr = VoiceProfileManager.get_instance()
+            final_text = profile_mgr.apply_replacements(formatted_text)
+            return final_text
+        except Exception as e:
+            print(f"[WhisperEngine] Stage 3 dictionary replacement failed: {e}. Returning formatted text.")
+            return formatted_text
 
     def clean_stop_keyword(self, text):
         """Removes trailing 'stop', 'stop recording', 'done', etc."""
@@ -318,4 +427,3 @@ class WhisperEngine:
                 break
 
         return cleaned
-

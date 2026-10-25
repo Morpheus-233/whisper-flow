@@ -1,16 +1,19 @@
-# Progress — Challenger Milestone 1
+# Progress — Challenger M1-1
 
-Last visited: 2026-10-15T15:21:00Z
+Last visited: 2026-10-22T10:51:00Z
+Status: Completed Empirical Challenge — Verdict: REQUEST_CHANGES
 
-- [x] Initialized BRIEFING.md and DISPATCH.md
+## Completed Steps
+- [x] Initialized DISPATCH.md and BRIEFING.md
 - [x] Read ORIGINAL_REQUEST.md, PROJECT.md, and worker_m1_1/handoff.md
-- [x] Inspect implementation code (calibration_engine.py, voice_profile.py, and existing tests)
-- [x] Design empirical stress-test suite targeting:
-  - Token sequence diffing corner cases (all inserted, all deleted, empty inputs, single tokens, repeated tokens)
-  - Punctuation stripping robustness (complex punctuation, unicode punctuation, leading/trailing/embedded)
-  - Multilingual & Devanagari / Unicode token boundaries
-  - Regex lookaround safety, special regex characters in vocabulary/replacements, catastrophic backtracking
-  - Profile serialization/deserialization and persistence integrity
-- [x] Execute stress-test suite using `.\.venv\Scripts\python.exe` (15/15 tests executed, bugs isolated)
-- [x] Evaluate results and document verdict (`DISPROVEN`)
-- [ ] Create `handoff.md` and send completion notification to parent
+- [x] Inspected codebase, existing tests, and benchmark scripts
+- [x] Developed adversarial test suite `tests/test_m1_round2_adversarial.py` covering:
+  - Extreme code-mixing (English tech terms, Hindi postpositions, URLs, metrics)
+  - Devanagari script edge cases (numerals, halants, matras, ligatures, candra vowels, visarga, danda, ZWJ)
+  - Punctuation-heavy Casual Chat inputs
+  - Large dictionary scaling (10 to 2000 rules) and collisions
+  - Two-Stage pipeline contract verification
+- [x] Executed empirical tests and isolated 6 verified failure modes
+- [x] Measured latency benchmarks and memory overhead
+- [x] Updated BRIEFING.md
+- [x] Prepared handoff.md with comprehensive 5-component report and explicit verdict

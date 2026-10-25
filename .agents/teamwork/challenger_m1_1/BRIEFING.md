@@ -1,59 +1,52 @@
-# BRIEFING — 2026-10-15T15:20:00Z
+# BRIEFING — 2026-10-22T10:50:00Z
 
 ## Mission
-Empirically stress-test calibration_engine.py and voice_profile.py for Milestone 1, verifying diffing, token boundaries, punctuation stripping, and regex lookaround substitutions, delivering a confirmed or disproven verdict.
+Adversarial empirical stress testing of Milestone M1 (Whisper Flow Round 2): test normalization, replacements, vocabulary, Romanization, casual chat styling, latency benchmarks, and memory overhead to deliver an empirical verdict.
 
 ## 🔒 My Identity
-- Archetype: challenger
+- Archetype: empirical-challenger
 - Roles: critic, specialist
 - Working directory: C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\challenger_m1_1
-- Original parent: 594ef618-48c0-4063-b24e-931d4cc7a88e
-- Milestone: Milestone 1
+- Original parent: b7127cef-b446-4dca-a8e7-b0da25424e7e
+- Milestone: M1
 - Instance: 1 of 1
 
 ## 🔒 Key Constraints
 - Review-only — do NOT modify implementation code
-- Run tests via .\.venv\Scripts\python.exe
-- .agents/teamwork/ must contain only metadata — source, tests, or data there is a violation
-- Write only to your folder; read any folder
-- If you cannot reproduce a bug empirically, it does not count
+- Report failures as findings — do NOT fix them yourself
+- All bugs must be verified empirically with executable tests/reproducers
+- Deliver explicit verdict: APPROVE or REQUEST_CHANGES in handoff.md
 
 ## Current Parent
-- Conversation ID: 594ef618-48c0-4063-b24e-931d4cc7a88e
+- Conversation ID: b7127cef-b446-4dca-a8e7-b0da25424e7e
 - Updated: not yet
 
 ## Review Scope
-- **Files to review**: `calibration_engine.py`, `voice_profile.py`
-- **Interface contracts**: `PROJECT.md`, `ORIGINAL_REQUEST.md`
-- **Review criteria**: diffing edge cases, token boundaries, punctuation stripping, lookaround regex substitutions, unicode/Devanagari, multi-word replacements
-
-## Key Decisions Made
-- Executed unit tests (`tests/test_speech_calibration.py`) and empirical stress tests (`tests/test_empirical_stress_m1.py`).
-- Identified 4 empirical bugs: (1) Devanagari matra truncation in `strip_punctuation`, (2) Devanagari false equality in `clean_token`/`compute_diff`, (3) Devanagari prefix replacement leak in `apply_replacements`, (4) Pure punctuation false equality in `compute_diff`.
-- Rendered verdict: `DISPROVEN` due to Devanagari Unicode mark stripping failures despite passing baseline Latin Hinglish/English.
+- **Files to review**: `src/whisper_flow/core/` / root implementations: `style_engine.py`, `whisper_engine.py`, `voice_profile.py`, `text_cleaner.py`, `config.py`
+- **Interface contracts**: `PROJECT.md`, `ORIGINAL_REQUEST.md`, `worker_m1_1/handoff.md`
+- **Review criteria**: Robustness against extreme code-mixing, Devanagari script edge cases (numerals, halants, matras, nuktas, ligatures, punctuation), Casual chat style punctuation handling, dictionary collisions and scaling, latency, memory
 
 ## Attack Surface
 - **Hypotheses tested**:
-  - Punctuation stripping preserves internal hyphens and quotes: PASS.
-  - Lookaround regex scales with 2000 rules without backtracking: PASS.
-  - Vocabulary biasing strictly adheres to token char limit: PASS.
-  - Devanagari Unicode marks survive punctuation stripping: FAIL (mutilated 6/6 words).
-  - Devanagari distinct words evaluate as non-equal in diff engine: FAIL ('कर' vs 'करो' yields 100% equal).
-  - Devanagari word boundaries prevent substring replacement: FAIL ('करो' replaces inside 'करोगे').
-  - Pure punctuation strings evaluate as 0% accuracy: FAIL ('...' vs '???' yields 100% equal).
-- **Vulnerabilities found**:
-  - `strip_punctuation`: `[^\w]` strips `Mn`/`Mc` Unicode non-spacing marks (matras).
-  - `clean_token`: strips vowel signs, causing false 100% diff matches.
-  - `voice_profile.py`: `k[-1].isalnum()` returns False for matras, dropping `(?!\w)` boundary.
-  - `compute_diff`: `"" == ""` in SequenceMatcher treats disjoint punctuation as 100% equal.
-- **Untested angles**: Full Whisper audio decoding loop with real mic input (hardware dependent).
+  1. Devanagari independent Candra vowels (`ऑ`, `ऍ`, `ॲ`) and Visarga (`ः`) are converted to Latin Hinglish without leaking script. [FAILED - Script leaks into output]
+  2. Sentence-ending Devanagari punctuation (`।`, `॥`) is cleanly separated and does not distort dictionary terms. [FAILED - Mangled dictionary terms and inserted broken schwas]
+  3. Devanagari replacement rules match when followed by Devanagari danda. [FAILED - Boundary regex lookahead blocks match]
+  4. Invisible Unicode joiners (`\u200D`, `\u200C`) are stripped during Romanization. [FAILED - Control codes leak]
+  5. `WhisperEngine.transcribe(..., style=None)` enforces Stage 3 dictionary replacements. [FAILED - Bypassed Stage 3]
+  6. Casual Chat punctuation handling strips pure punctuation without residue. [PARTIAL - Standalone dashes remain]
+  7. Large dictionary scaling (10, 100, 1,000, 2,000 rules) and memory overhead. [VERIFIED - <10ms for normal sizes, 2.3s for 2,000 rules / 1000 tokens]
+- **Vulnerabilities found**: 6 distinct failure modes reproduced empirically and recorded in `tests/test_m1_round2_adversarial.py`.
+- **Untested angles**: Live Groq Cloud latency under real network conditions (tested offline / simulated network failover to local CPU).
 
 ## Loaded Skills
-- None
+- None specified in dispatch
+
+## Key Decisions Made
+- Created standalone empirical adversarial suite `tests/test_m1_round2_adversarial.py` containing 20 tests.
+- Formally issuing verdict `REQUEST_CHANGES` due to script leakage, danda mangling of dictionary words, danda blockage of personal replacements, ZWJ leakage, and `style=None` Stage 3 bypass.
 
 ## Artifact Index
-- `DISPATCH.md` — Incoming dispatches
-- `BRIEFING.md` — Persistent context & state
-- `progress.md` — Liveness heartbeat
-- `tests/test_empirical_stress_m1.py` — Adversarial stress test suite
-- `handoff.md` — Hard handoff report with verdict DISPROVEN
+- `DISPATCH.md` — Incoming instructions
+- `progress.md` — Heartbeat and status
+- `handoff.md` — Final verdict and empirical report
+- `tests/test_m1_round2_adversarial.py` — Reproducible adversarial test harness

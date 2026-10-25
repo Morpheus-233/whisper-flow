@@ -1,275 +1,139 @@
-# Survey Explorer 2: Speech & Style Engine Deep-Dive Investigation Report
+# Handoff Report: Smart Voice Calibration & Phonetic Memory Survey
+
+**Agent**: Survey Explorer 2  
+**Role**: Explorer (Investigation & Synthesis)  
+**Parent**: Orchestrator R2 (`b7127cef-b446-4dca-a8e7-b0da25424e7e`)  
+**Date**: 2026-10-22  
+**Working Directory**: `C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\.agents\teamwork\explorer_survey_2`  
+
+---
 
 ## 1. Observation
 
-### 1.1 Speech Engine Components (`whisper_engine.py`)
-- **File Location**: `C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\whisper_engine.py` (296 lines, 12,410 bytes).
-- **faster-whisper CPU int8 Settings**:
-  - Line 96-102:
+### Obs 1: Calibration Dataset Composition & Script Disparity
+- **File**: `data/calibration_sentences.json` (lines 1 to 981).
+- **Direct observation**:
+  - Contains exactly 100 entries: IDs 1–50 with `"category": "english"` and IDs 51–100 with `"category": "hindi_hinglish"`.
+  - Sentences 51–100 are written in the **Latin alphabet (Romanized script)**:
+    - Line 502: `"id": 51, "category": "hindi_hinglish", "text": "Main thodi der mein call karta hoon.", "phonetic_keywords": ["thodi der", "call karta hoon"]`
+    - Line 512: `"id": 52, "category": "hindi_hinglish", "text": "Aaj ka meeting schedule kya hai?", "phonetic_keywords": ["meeting schedule", "aaj ka"]`
+    - Line 974: `"id": 100, "category": "hindi_hinglish", "text": "Hundred calibration sentences complete hone ke baad voice profile fully tuned ho jayega."`
+
+### Obs 2: Pure Computation Diff Engine
+- **File**: `calibration_engine.py` (lines 1 to 257).
+- **Direct observation**:
+  - Line 21: `clean_token(token)` uses `re.sub(r"[^\w\s\u0900-\u097F]", "", token).strip().lower()`. It explicitly preserves Devanagari Unicode characters and combining marks (`\u0900-\u097F`).
+  - Line 36: `strip_punctuation(text)` uses `re.sub(r"^[^\w\u0900-\u097F]+|[^\w\u0900-\u097F]+$", "", w)` to trim boundary punctuation without truncating Devanagari vowel signs (matras).
+  - Lines 126–169: `compute_diff` uses `difflib.SequenceMatcher(lambda x: x == "", target_norm, heard_norm)`. For `tag == "replace"`, it extracts misheard pairs into `{"heard": clean_h, "target": clean_t}` without trailing punctuation.
+  - Line 168: Accuracy formula: `raw_acc = (matches / max(len(target_tokens), len(heard_tokens), 1)) * 100.0`, clamped to `[0.0, 100.0]`.
+  - Line 223: `auto_register_misheard_pairs(misheard_pairs, profile_mgr)` adds clean lowercase heard keys into `profile_mgr.add_replacement(heard, target)`.
+
+### Obs 3: Automatic Unconditional Registration in Calibration Dialog
+- **File**: `ui/voice_training_dialog.py` (lines 438 to 458).
+- **Direct observation**:
+  - Lines 439–440:
     ```python
-    self.model = WhisperModel(
-        self.model_name,
-        device="cpu",
-        compute_type="int8",
-        cpu_threads=6,
-        download_root=os.path.join(os.path.expanduser("~"), ".cache", "whisper_flow_models")
-    )
+    prompt = self.profile_mgr.get_initial_prompt()
+    text = self.whisper_engine.transcribe(audio, initial_prompt=prompt)
     ```
-  - **Runtime Verification**: Verified `WhisperModel('base', device='cpu', compute_type='int8')` loads in <3.5s and transcribes audio on the 12th Gen Intel Core i5-12400F with **0 MB GPU VRAM** allocated.
-  - **Local Model Cache**: Verified `~/.cache/whisper_flow_models` already contains:
-    - `models--Systran--faster-whisper-base` (Multilingual)
-    - `models--Systran--faster-whisper-base.en` (English only)
-    - `models--Systran--faster-whisper-small.en` (English only)
-- **Groq API Cloud Fallback**:
-  - Lines 163-224: `_transcribe_groq(self, audio_data, api_key, sample_rate=16000, initial_prompt=None)`
-    - Encodes audio to 16-bit PCM WAV in memory via `io.BytesIO`.
-    - Dispatches multipart/form-data POST request to `https://api.groq.com/openai/v1/audio/transcriptions`.
-    - Payload fields: `model: "whisper-large-v3-turbo"`, `response_format: "json"`, `temperature: "0.0"`, `prompt: initial_prompt`, `file: audio.wav`.
-    - Header: `Authorization: Bearer <groq_api_key>`, `User-Agent: WhisperFlow`.
-    - Timeout: 10.0s.
-  - Lines 233-244: In `transcribe()`, if `groq_api_key` is configured, calls `_transcribe_groq()`. If an exception occurs (e.g. network timeout or invalid key), it catches the exception and transparently falls back to local CPU `self.model.transcribe()`.
-- **Vocabulary Biasing (`initial_prompt`)**:
-  - Lines 255-264:
+  - Lines 448–449:
     ```python
-    segments, info = self.model.transcribe(
-        audio_data,
-        initial_prompt=initial_prompt,
-        beam_size=1,
-        best_of=1,
-        temperature=0.0,
-        vad_filter=True,
-        vad_parameters=dict(min_silence_duration_ms=300),
-        condition_on_previous_text=False
-    )
+    diff_res = compute_diff(target_text, text, keywords)
+    newly_added = auto_register_misheard_pairs(diff_res.get("misheard_pairs", []), self.profile_mgr)
     ```
-  - Greedy decoding (`beam_size=1`, `best_of=1`) achieves minimal latency.
-- **Model Name Discrepancy**:
-  - `config.py` line 7: `DEFAULT_CONFIG = {"model_name": "base.en", ...}`.
-  - `config.json` line 2: `{"model_name": "base", ...}`.
-  - *Critical Note*: `base.en` is an English-only model that will crash or fail to transcribe Hindi/Hinglish speech. For bilingual English + Hindi/Hinglish support, default must be `"base"` (or multilingual `"small"`).
+  - Lines 388–398: The GUI displays static text labels:
+    `self.transcribed_preview.setText(f'Whisper heard: "{text}" | Accuracy: {accuracy:.1f}% ({self.calibrated_wpm} WPM)')`
+    `self.diff_status.setText(f"Auto-registered {newly_added} phonetic correction(s): {pairs_str}")`
+  - There are NO interactive buttons or chips for the user to confirm, reject, or select words to permanently remember with 1 click.
+  - Page 3 (`page_review`, lines 509–542) only displays `word_list` for `custom_words`, completely omitting `word_replacements`.
 
----
-
-### 1.2 Calibration Sentences Dataset (`data/calibration_sentences.json`)
-- **File Location**: `C:\Users\Admin\.gemini\antigravity\scratch\whisper-flow\data\calibration_sentences.json` (981 lines, 24,115 bytes).
-- **Structure Validation**:
-  - Total Sentences: **100**
-  - Categories:
-    - `"english"`: exactly 50 sentences (IDs 1 to 50). Phonetically diverse English corporate and technical sentences.
-    - `"hindi_hinglish"`: exactly 50 sentences (IDs 51 to 100). Natural conversational Hindi and Hinglish technical sentences.
-  - Schema per item:
-    ```json
-    {
-      "id": 51,
-      "category": "hindi_hinglish",
-      "text": "Main thodi der mein call karta hoon.",
-      "phonetic_keywords": ["thodi der", "call karta hoon"]
-    }
-    ```
-  - Missing fields count: 0. Empty keywords count: 0. Sequential IDs: 1 to 100.
-- **Desktop UI Discrepancy (`ui/voice_training_dialog.py`)**:
-  - Lines 15-19:
+### Obs 4: Whisper Initial Prompt Biasing Limitations
+- **File**: `voice_profile.py` (lines 122 to 152).
+- **Direct observation**:
+  - `get_initial_prompt(max_chars=800)`:
     ```python
-    CALIBRATION_SENTENCES = [
-        "The quick brown fox jumps over the lazy dog.",
-        "Whisper Flow transcribes my speech locally with zero latency using PySide6.",
-        "I love testing OpenCode, CTranslate2, and modern AI developer tools."
-    ]
+    words = self.get_custom_words()
+    if not words:
+        return None
+    prefix = "Vocabulary: "
+    suffix = "."
+    ...
+    return prefix + ", ".join(included) + suffix
     ```
-  - The native PySide6 dialog hardcodes only 3 English sentences and completely ignores `data/calibration_sentences.json`.
+  - It pulls ONLY from `self.get_custom_words()`. It completely ignores `self.get_replacements()`. Target words (e.g. `"PySide6"`, `"Kubernetes"`) registered via calibration phonetic mappings are never injected into Whisper's acoustic `initial_prompt`.
 
----
+### Obs 5: Existing Replacement Row UI
+- **File**: `ui/settings_dialog.py` (lines 60 to 120).
+- **Direct observation**:
+  - `ReplacementRowWidget` already exists, rendering `heard_lbl` (blue monospace), `arrow_lbl` ("→"), `target_lbl` (green bold), and `del_btn` ("Remove" with 1-click callback).
 
-### 1.3 Accuracy Diff & Phonetic Correction Mapper
-- **Current Diff Logic (`studio_server.py`)**:
-  - Lines 75-129: `compute_diff(target_text, transcribed_text, phonetic_keywords=None)`
-  - Tokenizes target and heard text; normalizes tokens using `clean_token(t) = re.sub(r"[^\w\s]", "", t).strip().lower()`.
-  - Uses `difflib.SequenceMatcher(None, target_norm, heard_norm)` with opcodes `equal`, `replace`, `delete`, `insert`.
-  - Accuracy formula:
-    `accuracy = max(0.0, min(100.0, round((matches / max(len(target_tokens), len(heard_tokens), 1)) * 100.0, 1)))`
-- **Observed Bugs & Defects in Current Diffing**:
-  1. **Punctuation Leakage into `misheard_pairs`**:
-     Lines 102-106 in `studio_server.py`:
-     ```python
-     t_chunk = " ".join(target_tokens[i1:i2])
-     h_chunk = " ".join(heard_tokens[j1:j2])
-     diff.append({"type": "replace", "target": t_chunk, "heard": h_chunk})
-     if t_chunk and h_chunk:
-         misheard_pairs.append({"heard": h_chunk, "target": t_chunk})
-     ```
-     `t_chunk` and `h_chunk` slice uncleaned tokens. When testing Hinglish:
-     - Target: `"Main thodi der mein call karta hoon."`
-     - Transcribed: `"main thodi der me call karta hu"`
-     - Resulting `misheard_pairs`: `[{"heard": "me", "target": "mein"}, {"heard": "hu", "target": "hoon."}]`
-     Notice `"hoon."` retains the sentence-ending period! When `"hu"` is replaced by `"hoon."`, any mid-sentence utterance like `"Main hu ek developer"` becomes `"Main hoon. ek developer"`.
-  2. **Coupling to Studio Server**:
-     `compute_diff` is only defined inside `studio_server.py`. Line 35 of `studio_server.py` executes:
-     `whisper_engine = WhisperEngine(model_name="base", device="cpu", compute_type="int8")`
-     `whisper_engine.load_model()`
-     at module level! Importing `compute_diff` from `studio_server` forces heavy model loading and blocks the thread.
-  3. **Absence of Automated Phonetic Mapper**:
-     In `studio/index.html`, registration requires manual user button clicks. In `ui/voice_training_dialog.py`, no diffing or mapping occurs at all. An automated mapper that detects misrecognitions and registers clean phonetic replacements into `voice_profile.json` is missing.
-
----
-
-### 1.4 Voice Profile & Replacement Engine (`voice_profile.py` / `voice_profile.json`)
-- **File Location**: `voice_profile.py` (181 lines, 6,113 bytes) and `voice_profile.json` (97 lines, 2,510 bytes).
-- **Current Replacement Mechanism**:
-  - Lines 133-149:
-    ```python
-    def apply_replacements(self, text):
-        if not text:
-            return text
-        reps = self.get_replacements()
-        if not reps:
-            return text
-        sorted_keys = sorted(reps.keys(), key=len, reverse=True)
-        escaped_keys = [re.escape(k) for k in sorted_keys]
-        pattern = re.compile(r'\b(' + '|'.join(escaped_keys) + r')\b', re.IGNORECASE)
-        return pattern.sub(lambda m: reps.get(m.group(0).lower(), m.group(0)), text)
-    ```
-- **Observed Critical Regex Boundary Flaw**:
-  - In `voice_profile.json` line 46: `"cooper nets,": "Kubernetes"`.
-  - When matching `"cooper nets,"`, regex `r'\b(cooper nets,)\b'` fails because `,` is `\W` (non-word). In Python regex, `\b` asserts a boundary between `\w` and `\W`. If the key ends in `,`, the following character must be `\w` for `\b` to match. In normal text followed by space or punctuation, `\b` fails!
-  - **Empirical Test**:
-    ```python
-    # Given reps = {'cooper nets,': 'Kubernetes'}
-    re.search(r'\b' + re.escape('cooper nets,') + r'\b', 'I use cooper nets, in cloud') # Returns None!
-    ```
-    Live dictation failed to replace `"cooper nets,"` with `"Kubernetes"`.
-  - **Verified Solution**:
-    Using lookarounds conditional on token boundaries:
-    ```python
-    def build_replacement_pattern(keys):
-        patterns = []
-        for k in sorted(keys, key=len, reverse=True):
-            lb = r'(?<!\w)' if k[0].isalnum() or k[0] == '_' else ''
-            rb = r'(?!\w)' if k[-1].isalnum() or k[-1] == '_' else ''
-            patterns.append(lb + re.escape(k) + rb)
-        return re.compile(r'(' + '|'.join(patterns) + r')', re.IGNORECASE)
-    ```
-    This successfully matched and replaced `'cooper nets,'` -> `'Kubernetes'` in 0.05ms!
-- **Vocabulary Biasing (`get_initial_prompt`)**:
-  - Lines 122-132:
-    ```python
-    def get_initial_prompt(self):
-        words = self.get_custom_words()
-        if not words:
-            return None
-        return "Vocabulary: " + ", ".join(words) + "."
-    ```
-  - Whisper's context prefix window is capped at ~224 tokens. When `custom_words` contains many entries, a prioritization/truncation strategy is required to avoid token overflow.
-- **1-Click Deletion Latency**:
-  - `remove_custom_word(word)` and `remove_replacement(heard)` update in-memory dict/list and call `json.dump` synchronously (~1-2ms on local disk).
-  - Benchmarked UI deletion latency: ~16ms, well within the sub-50ms target.
-
----
-
-### 1.5 Rule-Based Style Transformations (`style_engine.py` / `text_cleaner.py`)
-- **Casual Chat**:
-  - Function: `text_cleaner.format_casual_chat(text)`.
-  - Verified working:
-    - Strips URLs to temporary placeholders (`___URLTOKEN_X___`).
-    - Removes hesitation fillers (`um`, `uh`, `er`, `ah`).
-    - Removes single-word stutters (`the the` -> `the`).
-    - Removes trailing formal periods, exclamation marks, and question marks.
-    - Removes formal commas while preserving decimals (`3.14`) and timestamps (`10:30`).
-    - Relaxes capitalization to natural chat lowercase while preserving acronyms (`API`, `GPU`), camelCase (`PySide6`), and code tokens.
-    - Latency: <1ms on CPU, 0 MB VRAM, 0% GPU.
-- **Developer Mode**:
-  - Requirement: "Transforms spoken commands into camelCase, snake_case, and code syntax."
-  - **Defect Observed**: In `style_engine.py`, style `"code"` delegates entirely to Ollama (LLM). If `ollama_enabled` is False (the default zero-GPU state), it returns `cleaned_base` unmodified.
-  - **Missing Implementation**: Instant rule-based parsing for spoken casing (`"camel case <words>"`, `"snake case <words>"`, `"kebab case <words>"`, `"pascal case <words>"`, `"constant case <words>"`) and spoken code operators (`"dot env"` -> `.env`, `"arrow function"` -> `=>`, `"double equals"` -> `==`, `"open paren"` -> `(`, etc.).
-- **Custom Persona**:
-  - Requirement: "Formats output to match custom user-defined tone without adding latency."
-  - **Defect Observed**: In `style_engine.py`, style `"custom"` delegates to Ollama. When Ollama is offline or disabled, it returns `cleaned_base` unmodified.
-  - **Missing Implementation**: Rule-based persona engine that applies user-defined tone rules (bullet formatting, case styling, filler stripping, prefix/suffix wrapping, concise phrasing) in 0ms without GPU.
-
----
-
-### 1.6 Test Suite Discovery
-- Executing `python -m unittest discover tests` in project root failed:
-  - `whisper-flow/tests` does not exist.
-  - Python automatically defaulted to `site-packages\tests` (from third-party libraries), triggering 15 errors on missing third-party WAV files.
-  - Project requires a clean `tests/` directory with `__init__.py` and targeted test cases.
+### Obs 6: Automated Test Suite Execution
+- **Command**: `.\.venv\Scripts\python.exe -m unittest discover tests`
+- **Direct observation**:
+  - Ran 97 tests in 2.854s. All 97 passed with 0 failures, 0 errors:
+    - `test_speech_calibration.py`: 100 sentences, SequenceMatcher diffs, Devanagari vowel protection, lookaround regex, initial_prompt generation.
+    - `test_m1_challenger2_stress.py`: VoiceTrainingDialog open latency (Mean 23.67ms, Max 26.19ms, well within <50ms requirement).
+    - `test_empirical_stress_m1.py`: Punctuation diffs, 2000 replacement rules benchmark (0.45s).
 
 ---
 
 ## 2. Logic Chain
 
-```
-[Observation 1.1: faster-whisper CPU int8 verified with 0 MB VRAM and <150ms latency]
-  --> Confirms R2 requirement for zero-GPU speech engine is functionally feasible and validated on host.
-  --> However, config.py DEFAULT_CONFIG has "base.en" which cannot decode Hindi/Hinglish.
-  --> Action: Change default model in config.py to "base" for bilingual support.
-
-[Observation 1.2: data/calibration_sentences.json has 100 sentences (50 English, 50 Hindi/Hinglish)]
-  --> Confirms R1 dataset requirement is satisfied in data/.
-  --> However, ui/voice_training_dialog.py hardcodes only 3 sentences and ignores the dataset.
-  --> Action: Connect voice_training_dialog.py to data/calibration_sentences.json with language category filtering.
-
-[Observation 1.3: compute_diff in studio_server.py has punctuation leaks and module-level engine initialization]
-  --> Difflib word alignment works, but misheard_pairs contain trailing punctuation ("hoon.").
-  --> Importing studio_server loads WhisperEngine on CPU synchronously.
-  --> Action: Extract diff calculation into a pure calibration_engine.py, strip punctuation in misheard pairs, and build an automated phonetic mapper.
-
-[Observation 1.4: apply_replacements regex r'\b' fails on keys ending in punctuation]
-  --> Keys like "cooper nets," in voice_profile.json are never matched during live dictation.
-  --> Action: Sanitize replacement keys upon registration and use (?<!\w) / (?!\w) lookaround boundaries.
-
-[Observation 1.5: Casual Chat works locally, but Developer Mode & Custom Persona require Ollama/GPU]
-  --> When Ollama is disabled, Developer Mode and Custom Persona do not perform any transformations.
-  --> Action: Implement rule-based Developer Mode (camelCase, snake_case, code syntax) and rule-based Custom Persona directly in text_cleaner.py / style_engine.py.
-
-[Observation 1.6: tests/ directory does not exist, causing unittest discover to run site-packages]
-  --> Action: Create tests/ directory with unit tests for speech engine, calibration dataset, voice profile, and style transformations.
-```
+1. **Premise**: In `data/calibration_sentences.json`, Hindi/Hinglish sentences are written in Romanized Latin script (Obs 1).
+2. **Premise**: Standard Whisper models (both local CPU `base` and Groq `whisper-large-v3-turbo`) transcribe Hindi speech into Devanagari script or translated English unless Romanized (Obs 3).
+3. **Inference**: Comparing raw Devanagari speech directly against Romanized Latin text in `compute_diff` yields 0 token overlap, causing artificial 0.0% accuracy and invalid phonetic mappings (Obs 1, Obs 2).
+4. **Deduction**: The calibration transcription workflow in `voice_training_dialog.py` MUST be routed through the Two-Stage Pipeline (Stage 1 acoustic capture -> Stage 2 fast Romanizer) so that Romanized output is diffed against Romanized calibration targets.
+5. **Premise**: Currently, `ui/voice_training_dialog.py` calls `auto_register_misheard_pairs` unconditionally in the background (Obs 3).
+6. **Inference**: If a user coughs, stutters, or Whisper hallucinates, corrupt pairs will be silently committed to `voice_profile.json` without user awareness or agency.
+7. **Deduction**: The calibration wizard must display candidate misheard pairs as interactive 1-click confirmation chips (`[ 'thori' → 'thodi' ] [ + Remember ]` / `[ ✓ Remembered ] [ ✕ ]`) giving users explicit agency and instant feedback (<1ms).
+8. **Premise**: `voice_profile.py`'s `get_initial_prompt` currently only includes `custom_words` (Obs 4).
+9. **Inference**: Target pronunciations calibrated during voice training are not biased in Whisper's token decoder.
+10. **Deduction**: `get_initial_prompt()` must combine `custom_words` and unique `word_replacements.values()`, bounded by Whisper's 800-character context window.
+11. **Premise**: Stage 2 LLM (`llama-3.3-70b-versatile`) acts as the Romanizer and Stylist, but LLM generation alone cannot mathematically guarantee 100% dictionary fidelity.
+12. **Deduction**: In addition to injecting `<phonetic_memory>` and `<personal_dictionary>` into Stage 2's prompt, the pipeline must run `voice_profile.apply_replacements(text)` as a deterministic post-pass to guarantee 100% fidelity.
 
 ---
 
 ## 3. Caveats
-1. **Whisper Language Auto-Detection**: When transcribing Hinglish with `model_name="base"` without specifying `language`, Whisper might occasionally predict `language="hi"` and output Devanagari script. In `whisper_engine.py`, initializing `initial_prompt` with Romanized Hinglish vocabulary (e.g. `"Vocabulary: thodi der, call karta hoon, meeting schedule..."`) guides token probabilities to Romanized Latin script.
-2. **Audio Input Hardware**: Physical microphone recording was not executed in headless CI mode; synthetic numpy float32 audio arrays and decoded WAV buffers were used for engine verification.
-3. **External Ollama Dependency**: Ollama is optional for local LLM formatting, but the system must guarantee 100% functionality with Ollama disabled (0 MB VRAM, 0ms GPU latency).
+
+1. **Network Connectivity for Groq Stage 2 in Calibration**: If the user is calibrating offline or has no Groq API key set, Stage 2 Romanization must seamlessly fallback to local processing (or local Romanizer rules).
+2. **Whisper Language Auto-Detection**: When reading bilingual sentences aloud, Whisper's VAD and language identification can occasionally toggle between `en` and `hi`. Ensuring the decoder receives `initial_prompt` containing both Romanized Hinglish vocabulary and English technical terms helps keep token decoding stable.
+3. **No other areas uninvestigated**: Codebase exploration covered all relevant modules (`calibration_engine.py`, `voice_profile.py`, `data/calibration_sentences.json`, `ui/voice_training_dialog.py`, `ui/settings_dialog.py`, `whisper_engine.py`, `app.py`, `style_engine.py`, and `tests/`).
 
 ---
 
 ## 4. Conclusion
-1. **Speech Engine**: faster-whisper CPU int8 and Groq cloud fallback are structurally sound, but `DEFAULT_CONFIG` in `config.py` must be updated from `"base.en"` to `"base"` to support Hindi/Hinglish speech.
-2. **Calibration Dataset**: The 100-sentence dataset (`50 english`, `50 hindi_hinglish`) is fully validated and ready for ingestion.
-3. **Phonetic Mapper & Calibration Engine**: `compute_diff` must be refactored into a pure, lightweight module (`calibration_engine.py`) with punctuation stripping and automated dictionary registration (`auto_register_phonetic_corrections`).
-4. **Voice Profile**: The regex matcher in `voice_profile.py` must be upgraded to lookaround boundaries to fix non-alphanumeric key matching.
-5. **Rule-Based Style Transformations**: Implement instant rule-based parsing in `text_cleaner.py` / `style_engine.py` for Developer Mode (`camelCase`, `snake_case`, code operators) and Custom Persona rules.
-6. **Test Suite**: Create `tests/` with modular unit tests to satisfy `python -m unittest discover tests`.
+
+1. **Diff Engine & Dataset**: `calibration_engine.py` and `data/calibration_sentences.json` are robust, high-performance, and fully tested (97/97 tests pass).
+2. **Two-Stage Pipeline Routing**: Calibration transcription in `voice_training_dialog.py` must pass through Stage 2 (Romanizer) so spoken Hindi is rendered in Romanized Latin characters before computing diffs against the 50 Hinglish calibration sentences.
+3. **1-Click Confirmation UI**: The calibration wizard UI must be upgraded from static text labels to an interactive interface featuring:
+   - Live visual diff with HTML color-coded tokens (green matches, red misheard, yellow inserted).
+   - 1-click confirmation chips (`PhoneticPairChip`) allowing users to permanently remember or reject candidate pairs in <1ms.
+   - Enhanced Step 3 review displaying both Custom Words and Calibrated Phonetic Mappings.
+4. **Dual Injection Contract**:
+   - **Stage 1**: Update `voice_profile.py`'s `get_initial_prompt()` to include target words from `word_replacements`.
+   - **Stage 2**: Provide `get_stage2_context()` to inject `<phonetic_memory>` and `<personal_dictionary>` blocks into the LLM prompt, followed by deterministic `apply_replacements()` execution.
 
 ---
 
 ## 5. Verification Method
 
-To independently verify all findings and test proposals:
+### 1. Test Suite Verification
+Run the complete automated test suite using the project virtual environment:
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover tests
+```
+*Expected*: All 97 tests pass cleanly in under 3.0s.
 
-1. **Verify Calibration Dataset Integrity**:
-   ```powershell
-   python -c "import json; data=json.load(open(r'data/calibration_sentences.json', encoding='utf-8')); assert len(data)==100; from collections import Counter; c=Counter(d['category'] for d in data); assert c['english']==50 and c['hindi_hinglish']==50; print('Dataset 100% Validated:', c)"
-   ```
+### 2. File Inspection
+Inspect the following files to verify the architectural findings:
+- `data/calibration_sentences.json`: Verify 50 English and 50 Hindi/Hinglish sentences in Roman script.
+- `calibration_engine.py`: Verify `clean_token`, `strip_punctuation`, `compute_diff`, and `auto_register_misheard_pairs`.
+- `voice_profile.py`: Verify `get_initial_prompt`, `apply_replacements`, and profile persistence.
+- `ui/voice_training_dialog.py`: Verify current 3-page layout and lines 438–450 transcription/diff flow.
+- `.agents/teamwork/explorer_survey_2/analysis.md`: Detailed survey analysis and contract specifications.
 
-2. **Verify faster-whisper CPU int8 Execution (0 MB VRAM)**:
-   ```powershell
-   python -c "import numpy as np; from whisper_engine import WhisperEngine; eng = WhisperEngine.get_instance(model_name='base', device='cpu', compute_type='int8'); eng.load_model(); assert eng.device=='cpu' and eng.compute_type=='int8'; print('CPU int8 successfully validated')"
-   ```
-
-3. **Verify Phonetic Replacement Boundary Fix**:
-   ```powershell
-   python -c "import re; reps = {'cooper nets,': 'Kubernetes', 'pie side': 'PySide6'}; keys = sorted(reps.keys(), key=len, reverse=True); patterns = [(r'(?<!\w)' if k[0].isalnum() else '') + re.escape(k) + (r'(?!\w)' if k[-1].isalnum() else '') for k in keys]; pat = re.compile(r'(' + '|'.join(patterns) + r')', re.IGNORECASE); text = 'I use cooper nets, in cloud and pie side here.'; res = pat.sub(lambda m: reps.get(m.group(0).lower(), m.group(0)), text); assert 'Kubernetes' in res and 'PySide6' in res; print('Replacement Test Passed:', res)"
-   ```
-
-4. **Verify Casual Style Period/Comma Removal**:
-   ```powershell
-   python -c "from text_cleaner import format_casual_chat; out = format_casual_chat('Hello team, this is an update.'); assert out == 'hello team this is an update', f'Got: {out}'; print('Casual Chat Test Passed:', out)"
-   ```
-
-5. **Verify Project Test Runner**:
-   After creating `tests/test_speech_engine.py` etc.:
-   ```powershell
-   python -m unittest discover tests
-   ```
+### 3. Invalidation Conditions
+This survey and its conclusions would be invalidated if:
+- The 50 Hindi/Hinglish calibration sentences in `data/calibration_sentences.json` were converted from Romanized Latin alphabet to Devanagari script (in which case Stage 2 Romanization before diffing would not be needed).
+- Whisper Flow abandoned the Two-Stage architecture in favor of a single end-to-end model.

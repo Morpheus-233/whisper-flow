@@ -184,9 +184,11 @@ class TestRealWorldWorkloadScenarios(unittest.TestCase):
         """
         mgr = VoiceProfileManager.get_instance()
         original_words = list(mgr.get_custom_words())
+        original_reps = dict(mgr.get_replacements())
 
         try:
             mgr.profile["custom_words"] = ["WhisperFlow", "CTranslate2", "Hinglish"]
+            mgr.profile["word_replacements"] = {}
 
             # 1. Generate biasing prompt
             prompt = mgr.get_initial_prompt()
@@ -195,6 +197,7 @@ class TestRealWorldWorkloadScenarios(unittest.TestCase):
             # 2. Mock WhisperEngine transcription using greedy decoding
             from whisper_engine import WhisperEngine
             engine = WhisperEngine(model_name="base", device="cpu", compute_type="int8")
+            engine.engine_mode = "local"
 
             mock_model = MagicMock()
             mock_seg = MagicMock()
@@ -219,6 +222,7 @@ class TestRealWorldWorkloadScenarios(unittest.TestCase):
             self.assertEqual(final_text, "whisper flow performs zero GPU inference with CTranslate2")
         finally:
             mgr.profile["custom_words"] = original_words
+            mgr.profile["word_replacements"] = original_reps
 
 
 if __name__ == "__main__":
