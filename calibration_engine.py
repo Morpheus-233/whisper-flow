@@ -196,14 +196,17 @@ def load_calibration_dataset(
     Loads all calibration sentences from JSON dataset file.
     Resolves relative paths safely and validates schema structure.
     """
+    from config import get_resource_path
     target_path = json_path
     if not os.path.isabs(target_path):
-        if not os.path.exists(target_path):
-            # Check relative to module file location
+        candidate = get_resource_path(json_path)
+        if os.path.exists(candidate):
+            target_path = candidate
+        elif not os.path.exists(target_path):
             module_dir = os.path.dirname(os.path.abspath(__file__))
-            candidate = os.path.join(module_dir, json_path)
-            if os.path.exists(candidate):
-                target_path = candidate
+            candidate2 = os.path.join(module_dir, json_path)
+            if os.path.exists(candidate2):
+                target_path = candidate2
 
     with open(target_path, "r", encoding="utf-8") as f:
         data = json.load(f)

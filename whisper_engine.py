@@ -17,12 +17,27 @@ import ctranslate2
 # Ensure NVIDIA CUDA DLLs are found and loaded by CTranslate2 on Windows when using CUDA
 def setup_cuda_dlls():
     try:
+        search_dirs = []
+        if getattr(sys, 'frozen', False):
+            meipass = getattr(sys, '_MEIPASS', '')
+            if meipass:
+                search_dirs.append(meipass)
+                search_dirs.append(os.path.join(meipass, 'nvidia'))
+            exe_dir = os.path.dirname(sys.executable)
+            search_dirs.append(exe_dir)
+            search_dirs.append(os.path.join(exe_dir, 'nvidia'))
+
         site_pkg = os.path.join(sys.prefix, 'Lib', 'site-packages')
         nvidia_base = os.path.join(site_pkg, 'nvidia')
         if os.path.exists(nvidia_base):
-            for root, dirs, _ in os.walk(nvidia_base):
-                if 'bin' in dirs:
-                    bin_dir = os.path.join(root, 'bin')
+            search_dirs.append(nvidia_base)
+
+        for base_dir in search_dirs:
+            if not os.path.exists(base_dir):
+                continue
+            for root, dirs, _ in os.walk(base_dir):
+                if 'bin' in dirs or root.endswith('bin'):
+                    bin_dir = os.path.join(root, 'bin') if 'bin' in dirs else root
                     try:
                         os.add_dll_directory(bin_dir)
                     except Exception:
@@ -58,6 +73,7 @@ class WhisperEngine:
         self.model = None
         self.is_loading = False
         self._load_lock = threading.Lock()
+        self.on_status_callback = None
 
     @classmethod
     def get_instance(cls, model_name=None, device=None, compute_type=None, groq_api_key=None, engine_mode=None):
@@ -102,6 +118,21 @@ class WhisperEngine:
             target_device = self.device or cfg.get("device", "cpu")
             target_compute = self.compute_type or cfg.get("compute_type", "int8")
 
+            cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "whisper_flow_models")
+            model_cached = False
+            if os.path.exists(cache_dir):
+                for item in os.listdir(cache_dir):
+                    if self.model_name in item:
+                        model_cached = True
+                        break
+
+            if not model_cached:
+                if hasattr(self, "on_status_callback") and self.on_status_callback:
+                    try:
+                        self.on_status_callback(f"Downloading '{self.model_name}' model. This happens once on first use.")
+                    except Exception:
+                        pass
+
             # Zero-GPU CPU execution: guaranteed 0 MB VRAM allocation
             if target_device == "cpu":
                 print(f"[WhisperEngine] Loading model '{self.model_name}' on CPU (int8, cpu_threads=6)...")
@@ -120,6 +151,11 @@ class WhisperEngine:
                     print(f"[WhisperEngine] Failed loading model on CPU: {e}")
                     raise
                 self.is_loading = False
+                if not model_cached and hasattr(self, "on_status_callback") and self.on_status_callback:
+                    try:
+                        self.on_status_callback(f"Model '{self.model_name}' ready!")
+                    except Exception:
+                        pass
                 return self.model
 
             # CUDA execution path
@@ -171,6 +207,11 @@ class WhisperEngine:
                     self.compute_type = "int8"
 
             self.is_loading = False
+            if not model_cached and hasattr(self, "on_status_callback") and self.on_status_callback:
+                try:
+                    self.on_status_callback(f"Model '{self.model_name}' ready!")
+                except Exception:
+                    pass
             return self.model
 
     def get_vram_usage_mb(self):

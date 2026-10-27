@@ -17,6 +17,7 @@ dist/
 
 # Virtual Environments
 .venv/
+.build_venv/
 venv/
 env/
 ENV/
@@ -27,6 +28,10 @@ ENV/
 *.bak
 *.txt
 !requirements.txt
+build_log.txt
+
+# Standalone build output
+WhisperFlow_App/
 
 # Local runtime configuration
 config.json

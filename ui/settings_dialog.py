@@ -999,11 +999,20 @@ class SettingsDialog(QDialog):
             is_running = False
 
         if not is_running:
-            server_script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "studio_server.py")
-            if os.path.exists(server_script):
-                python_exe = sys.executable
-                subprocess.Popen([python_exe, server_script], cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                time.sleep(0.4)
+            if getattr(sys, "frozen", False):
+                try:
+                    import threading
+                    import studio_server
+                    threading.Thread(target=studio_server.run_server, kwargs={"port": 8000}, daemon=True).start()
+                    time.sleep(0.4)
+                except Exception as e:
+                    print(f"Notice launching frozen studio server: {e}")
+            else:
+                server_script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "studio_server.py")
+                if os.path.exists(server_script):
+                    python_exe = sys.executable
+                    subprocess.Popen([python_exe, server_script], cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                    time.sleep(0.4)
 
         webbrowser.open("http://127.0.0.1:8000")
 

@@ -21,15 +21,15 @@ try:
 except Exception as e:
     print(f"[StudioServer] Warning applying PyAV patch: {e}")
 
+from config import get_resource_path
 from whisper_engine import WhisperEngine
 from voice_profile import VoiceProfileManager
 from calibration_engine import compute_diff, auto_register_misheard_pairs
 
-# Directory paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STUDIO_DIR = os.path.join(BASE_DIR, "studio")
-DATA_DIR = os.path.join(BASE_DIR, "data")
-CALIBRATION_FILE = os.path.join(DATA_DIR, "calibration_sentences.json")
+# Directory paths using get_resource_path for frozen PyInstaller and source compatibility
+STUDIO_DIR = get_resource_path("studio")
+DATA_DIR = get_resource_path("data")
+CALIBRATION_FILE = get_resource_path(os.path.join("data", "calibration_sentences.json"))
 
 # Initialize WhisperEngine with CPU int8 and multilingual base model
 print("[StudioServer] Initializing WhisperEngine (CPU int8)...")

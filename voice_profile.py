@@ -1,8 +1,35 @@
 import json
 import os
 import re
+import sys
+from config import get_app_data_dir
 
-PROFILE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice_profile.json")
+def get_profile_path() -> str:
+    """Returns the path to voice_profile.json, migrating legacy profile if running frozen."""
+    if getattr(sys, "frozen", False):
+        target_path = os.path.join(get_app_data_dir(), "voice_profile.json")
+        if not os.path.exists(target_path):
+            exe_dir = os.path.dirname(sys.executable)
+            candidate_dirs = [
+                exe_dir,
+                os.path.dirname(exe_dir),
+                os.getcwd(),
+                os.path.dirname(os.getcwd()),
+                getattr(sys, "_MEIPASS", "")
+            ]
+            for c_dir in candidate_dirs:
+                if c_dir and os.path.exists(os.path.join(c_dir, "voice_profile.json")):
+                    try:
+                        import shutil
+                        shutil.copy2(os.path.join(c_dir, "voice_profile.json"), target_path)
+                        break
+                    except Exception as e:
+                        print(f"Notice migrating voice_profile.json: {e}")
+        return target_path
+    else:
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice_profile.json")
+
+PROFILE_FILE = get_profile_path()
 
 DEFAULT_PROFILE = {
     "custom_words": [
@@ -60,20 +87,29 @@ class VoiceProfileManager:
         return cls._instance
 
     def load_profile(self):
-        if os.path.exists(PROFILE_FILE):
+        profile_file = get_profile_path()
+        if os.path.exists(profile_file):
             try:
-                with open(PROFILE_FILE, "r", encoding="utf-8") as f:
+                with open(profile_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     profile = DEFAULT_PROFILE.copy()
                     profile.update(data)
                     return profile
             except Exception as e:
                 print(f"[VoiceProfile] Error loading voice profile: {e}")
-        return DEFAULT_PROFILE.copy()
+        prof = DEFAULT_PROFILE.copy()
+        if getattr(sys, "frozen", False) and not os.path.exists(profile_file):
+            try:
+                with open(profile_file, "w", encoding="utf-8") as f:
+                    json.dump(prof, f, indent=4)
+            except Exception:
+                pass
+        return prof
 
     def save_profile(self):
+        profile_file = get_profile_path()
         try:
-            with open(PROFILE_FILE, "w", encoding="utf-8") as f:
+            with open(profile_file, "w", encoding="utf-8") as f:
                 json.dump(self.profile, f, indent=4)
         except Exception as e:
             print(f"[VoiceProfile] Error saving voice profile: {e}")

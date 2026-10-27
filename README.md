@@ -4,65 +4,61 @@
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://python.org)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-0078D6.svg)](https://microsoft.com/windows)
 [![Engine: faster-whisper](https://img.shields.io/badge/Engine-faster--whisper%20(CTranslate2)-orange.svg)](https://github.com/SYSTRAN/faster-whisper)
-[![Local LLM: Ollama](https://img.shields.io/badge/LLM-Ollama%20(Local%20AI)-blueviolet.svg)](https://ollama.com)
+[![Cloud Engine: Groq](https://img.shields.io/badge/Cloud%20Engine-Groq%20API%20(Optional)-purple.svg)](https://groq.com)
+[![Local LLM: Ollama](https://img.shields.io/badge/LLM-Ollama%20(Optional)-blueviolet.svg)](https://ollama.com)
 
-A minimalist, GPU-accelerated local voice-to-text dictation application for Windows featuring an expandable floating widget inspired by Wispr Flow, personalized voice calibration, custom vocabulary biasing, and on-device LLM speech styling inspired by BetterWispr.
+A minimalist, high-performance voice dictation application for Windows featuring an expandable floating widget inspired by Wispr Flow, personalized voice calibration, custom vocabulary biasing, app-aware speech styles, and instant direct paste into any text box.
 
-Whisper Flow remains hidden until you focus an editable text input in any application, expands into an interactive recording bar with live soundwave visualization, transcribes speech completely offline with high accuracy, styles it to your persona, and pastes the result directly into your active input field.
-
----
-
-## Features
-
-- **Voice Training & Acoustic Calibration**:
-  - Interactive calibration wizard that measures your room's ambient noise floor, optimizes microphone gain, and benchmarks speech cadence.
-  - Guided test sentences to test pronunciation and accent handling.
-
-- **Personal Dictionary & Vocabulary Biasing**:
-  - Primes Whisper's token decoder with personal names, technical jargon, and project acronyms using `initial_prompt` biasing.
-  - Phonetic auto-correction dictionary that substitutes misheard words with exact desired spellings.
-
-- **Local LLM Speech Stylist (Ollama Integration)**:
-  - Powered by your local Ollama runtime running on your GPU (e.g. Qwen, Llama 3.2, Gemma).
-  - Presets:
-    - **Professional / Executive**: Polished prose, cleaned grammar, proper punctuation.
-    - **Casual Chat**: Natural, punchy, conversational tone for messaging.
-    - **Developer / Code**: Formats code identifiers (camelCase, snake_case), backticks, and technical terms.
-    - **Raw Cleaned**: Verbatim transcription with stutter and duplicate word removal.
-    - **Custom Persona**: User-defined system prompts for custom phrasing and tone.
-  - Built-in timeout safety fallback to instant rule cleaning if Ollama is paused or unreachable.
-
-- **App-Aware Contextual Styles**:
-  - Automatically switches styles based on the active target application (e.g., Code style in VS Code / Terminal, Casual in Discord / Slack, Professional in Word / Outlook).
-
-- **Intelligent Text Box Focus Detection**:
-  - Automatically appears when an editable text field is focused (Chrome, Edge, Spotify search, PowerPoint text boxes/notes pane, Slack, Discord, VS Code, Word, Notepad, etc.).
-  - Automatically hides when clicking outside, switching to non-text UI, or focusing read-only / password inputs.
-  - Can be toggled to stay visible continuously via settings or tray menu.
-
-- **Dual-State Widget**:
-  - **Resting Dock**: Compact obsidian capsule with an audio indicator glow.
-  - **Dynamic 3-Segment Recording Bar**:
-    - **Cancel Button**: Discards the current audio and collapses back without exiting.
-    - **Waveform Capsule**: Real-time soundwave visualization reactive to microphone volume.
-    - **Finish Button**: Transcribes speech, displays confirmation, and types text directly into the active field.
-
-- **Fast Local Transcription (faster-whisper)**:
-  - Runs 100% locally on your machine with zero cloud requests or telemetry.
-  - **Hardware Auto-Detection**: Automatically utilizes NVIDIA CUDA (float16) when supported, with seamless fallback to fast CPU inference (int8).
-  - Dynamic model downloading on first launch (default: `base.en`).
-
-- **Terminal and Developer Support**:
-  - Native support for modern terminal emulators (Windows Terminal, OpenCode, PowerShell, Git Bash, WezTerm, Alacritty) with automated clipboard injection (`Ctrl+Shift+V`).
-
-- **Multi-Monitor Aware**:
-  - Maintains user-defined position across multi-monitor setups without jumping across screens on clicks.
+Whisper Flow remains hidden until you focus an editable text input in any application, expands into an interactive recording bar with live soundwave visualization, transcribes speech with low latency, applies your selected speech style, and pastes the result directly into your active window.
 
 ---
 
-## Quick Start
+## Transcription & Privacy Modes
 
-### Option 1: Run from Source (Python)
+Whisper Flow supports two complementary transcription engines, switchable at any time from Settings or the system tray:
+
+1. **Local Mode (Default / Offline)**:
+   - Uses `faster-whisper` (CTranslate2) running 100% locally on your machine.
+   - Hardware acceleration: automatically utilizes NVIDIA CUDA when available, with instant fallback to CPU (`int8`).
+   - Downloads the Whisper model on first use (default: `base`). A tray notification displays progress during first-time download.
+   - **Privacy**: Zero audio or text data leaves your machine. Completely offline.
+
+2. **Groq Cloud Mode (Optional High Speed)**:
+   - Uses Groq Cloud API (`whisper-large-v3-turbo` for speech recognition and `qwen/qwen3.8-27b` / Llama models for style formatting).
+   - Enabled by pasting your Groq API key into Preferences.
+   - **Privacy Notice**: Audio and text leave your machine ONLY when Groq Cloud mode is active and an API key is provided.
+
+---
+
+## Build the .exe (No Command Prompt)
+
+You can build a standalone, windowed `WhisperFlow.exe` that runs without any command prompt window. You never have to type a single terminal command.
+
+1. **Download the repository**:
+   - Click the green **Code** button on GitHub and select **Download ZIP**.
+   - Extract the downloaded ZIP file to any folder on your computer.
+
+2. **Run the One-Click Builder**:
+   - Double-click **`Build_WhisperFlow.bat`** in the extracted folder.
+   - A dark-themed builder window will appear showing live progress.
+   - *Python Check*: The builder automatically detects Python 3.10+. If Python is not installed, it offers to install Python 3.11 automatically via Windows Package Manager (`winget`) or opens python.org.
+   - *(Optional)* Check "Include NVIDIA GPU support" if you have an NVIDIA RTX/GTX graphics card and want GPU acceleration bundled.
+
+3. **Finished!**:
+   - The compiled standalone app is placed in `WhisperFlow_App\` in the repository root.
+   - A Desktop shortcut named **Whisper Flow** is created automatically.
+   - Click **Launch WhisperFlow** in the builder or launch via your Desktop shortcut.
+
+> [!NOTE]
+> **Windows SmartScreen**: Because the standalone executable is built locally on your machine and is self-signed, Windows SmartScreen may show an "unknown publisher" banner on first launch. Click **More info** and then **Run anyway**.
+>
+> **Antivirus Software**: Antivirus or endpoint protection software may scrutinize keyboard listener and clipboard automation tools. Whisper Flow uses standard Windows UI Automation and synthetic input APIs (`pynput`, `uiautomation`, `pyautogui`) solely to detect focused text fields and insert transcribed text.
+
+---
+
+## Run from Source (Developers)
+
+If you prefer to run directly from source code:
 
 1. **Clone the repository:**
    ```bash
@@ -82,55 +78,43 @@ Whisper Flow remains hidden until you focus an editable text input in any applic
    ```
 
 4. **(Optional) Enable NVIDIA GPU Acceleration:**
-   For NVIDIA GPUs (RTX / GTX series) using CUDA:
    ```bash
    pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
    ```
 
 5. **(Optional) Enable Local LLM Styling with Ollama:**
-   Download and install [Ollama](https://ollama.com) on Windows. Ensure Ollama is running and pull your preferred model:
+   Install [Ollama](https://ollama.com) on Windows and pull your preferred model:
    ```bash
    ollama pull qwen3.5:9b-q4_K_M
-   # or for ultra-low latency:
-   ollama pull llama3.2:1b
    ```
 
-6. **Launch the application:**
-   - Command line:
-     ```bash
-     python app.py
-     ```
-   - Console batch launcher: double-click `run_app.bat`
-   - Silent background launcher: double-click `WhisperFlow_Silent.vbs`
-
----
-
-### Option 2: Pre-Built Portable Executable
-
-Download `WhisperFlow-windows-x64.zip` from the [GitHub Releases](https://github.com/Morpheus-233/whisper-flow/releases) page. Extract and run `WhisperFlow.exe` directly without installing Python.
+6. **Launch:**
+   ```bash
+   python app.py
+   ```
 
 ---
 
 ## Usage
 
-1. Click into any editable text box or terminal prompt.
-2. Click the **Whisper Flow widget** or press **`Ctrl + Shift + Space`** to begin recording.
-3. Speak naturally. The waveform displays real-time microphone levels.
+1. Click into any editable text box or terminal window.
+2. Click the **Whisper Flow widget** or press **`Ctrl + Shift + Space`** (default hotkey; `Ctrl + Alt + Space` also supported) to begin recording.
+3. Speak naturally. The waveform capsule visualizes live microphone levels.
 4. When finished:
    - Click the checkmark button or press **`Ctrl + Shift + Space`** to transcribe and insert text.
-   - Click the cancel button to discard the audio recording.
-5. Quick Style Switch: Right-click the floating widget or tray icon to switch between **Professional**, **Casual**, **Developer**, or **Raw** modes on the fly.
+   - Click the cancel button (`X`) to discard the audio without transcribing.
+5. Quick Style Switch: Right-click the floating widget or tray icon to switch between **Professional**, **Casual**, **Developer**, **Raw Cleaned**, or **Custom Persona** styles.
 
 ---
 
 ## Configuration and Preferences
 
-Access preferences by right-clicking the system tray icon or selecting the settings icon:
-- **General Tab**: Select Whisper model, microphone device, hotkey, and focus auto-show options.
-- **Voice & Styles Tab**: Choose active speech style preset, toggle app-aware styles, configure local Ollama model, and launch the Voice Calibration Wizard.
-- **Personal Dictionary Tab**: Add custom names, jargon, and phonetic auto-correction rules.
+Access preferences by clicking the gear icon on the widget or right-clicking the system tray icon:
+- **General Tab**: Select Whisper model, audio input device, engine mode (Groq Cloud vs Local CPU), hotkey, and focus auto-show settings.
+- **Voice & Styles Tab**: Choose speech styles, toggle app-aware automatic style switching, configure local Ollama, and launch the Voice Calibration Wizard.
+- **Personal Dictionary Tab**: Add custom names, technical jargon, and phonetic auto-correction replacement rules.
 
-User preferences are saved locally to `config.json` and `voice_profile.json`.
+When running as a built executable, user preferences are stored in `%APPDATA%\WhisperFlow\config.json` and `%APPDATA%\WhisperFlow\voice_profile.json` (auto-migrated from older versions on first launch), surviving rebuilds and updates. Application diagnostic logs are written to `%APPDATA%\WhisperFlow\logs\app.log` with automatic API key redaction.
 
 ---
 
@@ -139,23 +123,24 @@ User preferences are saved locally to `config.json` and `voice_profile.json`.
 ```text
 whisper-flow/
 ├── ui/
-│   ├── floating_widget.py       # Expandable widget and dynamic animations
+│   ├── floating_widget.py       # Dynamic widget with recording waveform
 │   ├── settings_dialog.py       # Preferences dialog (General, Voice, Dictionary)
 │   ├── voice_training_dialog.py # Guided acoustic and cadence calibration wizard
 │   └── __init__.py
-├── app.py                       # Main application entry point, tray icon, and IPC
+├── app.py                       # Main application entry point, tray icon, and single-instance IPC
 ├── audio_engine.py              # Audio recording and sounddevice stream
-├── config.py                    # Configuration loader and default settings
+├── config.py                    # Configuration management and %APPDATA% path resolution
 ├── focus_detector.py            # Windows UI Automation text-box focus tracking
 ├── paster.py                    # Text pasting and clipboard injection
-├── style_engine.py              # Local Ollama LLM speech stylist & formatting presets
-├── text_cleaner.py              # Post-processing and stutter removal
+├── style_engine.py              # Speech styles and Hinglish transliteration
+├── text_cleaner.py              # Post-processing, verbal retractions, and stutter removal
 ├── voice_profile.py             # Personal vocabulary, dictionary, and acoustic settings
-├── whisper_engine.py            # faster-whisper CTranslate2 transcription engine
-├── WhisperFlow_Silent.vbs       # Background launcher script
-├── run_app.bat                  # Batch launcher script
+├── whisper_engine.py            # faster-whisper CTranslate2 & Groq Cloud engine
+├── Build_WhisperFlow.bat        # One-click standalone builder entry point
+├── build_gui.py                 # Tkinter progress window and build executor
+├── WhisperFlow.spec             # Committed PyInstaller specification
 ├── create_desktop_shortcut.py   # Desktop shortcut generator
-├── requirements.txt             # Python package requirements
+├── requirements.txt             # Python package dependencies
 └── README.md
 ```
 

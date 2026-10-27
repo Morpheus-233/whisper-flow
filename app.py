@@ -1,17 +1,34 @@
 import sys
 import os
+import re
 import threading
 import time
-import tempfile
 import ctypes
 from ctypes import wintypes
 
-LOG_FILE = os.path.join(tempfile.gettempdir(), "whisper_flow_startup.log")
+from config import get_app_data_dir, get_resource_path
+
+# Dedicated file logging in %APPDATA%\WhisperFlow\logs\app.log (or local directory if not frozen)
+LOG_DIR = os.path.join(get_app_data_dir(), "logs")
+try:
+    os.makedirs(LOG_DIR, exist_ok=True)
+except Exception:
+    pass
+LOG_FILE = os.path.join(LOG_DIR, "app.log")
+
+API_KEY_REGEX = re.compile(r"gsk_[a-zA-Z0-9_-]{15,}")
+
+def sanitize_log(msg: str) -> str:
+    """Sanitizes sensitive Groq API keys from all written logs and exception dumps."""
+    if not isinstance(msg, str):
+        msg = str(msg)
+    return API_KEY_REGEX.sub("gsk_***", msg)
 
 def log_debug(msg):
     try:
+        clean_msg = sanitize_log(msg)
         with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {clean_msg}\n")
     except Exception:
         pass
 
@@ -30,14 +47,31 @@ if sys.stderr is None:
 def exception_hook(exctype, value, tb):
     import traceback
     try:
+        formatted = "".join(traceback.format_exception(exctype, value, tb))
+        clean_formatted = sanitize_log(formatted)
         with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"\n--- UNCAUGHT EXCEPTION: {exctype.__name__}: {value} ---\n")
-            traceback.print_tb(tb, file=f)
+            f.write(f"\n--- UNCAUGHT EXCEPTION: {exctype.__name__} ---\n{clean_formatted}\n")
     except Exception:
         pass
-    sys.__excepthook__(exctype, value, tb)
+    if sys.__excepthook__:
+        try:
+            sys.__excepthook__(exctype, value, tb)
+        except Exception:
+            pass
 
 sys.excepthook = exception_hook
+
+if hasattr(threading, "excepthook"):
+    def thread_exception_hook(args):
+        import traceback
+        try:
+            formatted = "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback))
+            clean_formatted = sanitize_log(formatted)
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(f"\n--- UNCAUGHT THREAD EXCEPTION [{args.thread.name if args.thread else 'unknown'}] ---\n{clean_formatted}\n")
+        except Exception:
+            pass
+    threading.excepthook = thread_exception_hook
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
@@ -128,6 +162,7 @@ class AppSignals(QObject):
     paste_completed = Signal()
     mouse_clicked = Signal(int, int)
     focus_changed = Signal()
+    status_message = Signal(str)
 
 class WhisperFlowApp:
     def __init__(self):
@@ -142,6 +177,7 @@ class WhisperFlowApp:
         self.whisper_engine = WhisperEngine.get_instance(
             model_name=self.config.get("model_name", "base.en")
         )
+        self.whisper_engine.on_status_callback = lambda msg: self.signals.status_message.emit(msg)
         self.paster = Paster()
         self.voice_profile = VoiceProfileManager.get_instance()
         self.style_engine = StyleEngine.get_instance()
@@ -216,6 +252,16 @@ class WhisperFlowApp:
         self.signals.paste_completed.connect(self._on_paste_completed)
         self.signals.mouse_clicked.connect(self._on_mouse_clicked)
         self.signals.focus_changed.connect(self._on_focus_changed)
+        self.signals.status_message.connect(self._show_tray_message)
+
+    @Slot(str)
+    def _show_tray_message(self, msg: str):
+        log_debug(f"[Tray Notification] {msg}")
+        if hasattr(self, 'tray_icon') and self.tray_icon and QSystemTrayIcon.isSystemTrayAvailable():
+            try:
+                self.tray_icon.showMessage("Whisper Flow", msg, QSystemTrayIcon.MessageIcon.Information, 4500)
+            except Exception:
+                pass
 
     @Slot(str)
     def _on_engine_changed(self, mode: str):
@@ -773,11 +819,19 @@ class WhisperFlowApp:
                 is_running = False
 
             if not is_running:
-                server_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "studio_server.py")
-                if os.path.exists(server_script):
-                    python_exe = sys.executable
-                    subprocess.Popen([python_exe, server_script], cwd=os.path.dirname(os.path.abspath(__file__)))
-                    time.sleep(0.4)
+                if getattr(sys, "frozen", False):
+                    try:
+                        import studio_server
+                        threading.Thread(target=studio_server.run_server, kwargs={"port": 8000}, daemon=True).start()
+                        time.sleep(0.4)
+                    except Exception as e:
+                        log_debug(f"Error launching frozen studio server: {e}")
+                else:
+                    server_script = get_resource_path("studio_server.py")
+                    if os.path.exists(server_script):
+                        python_exe = sys.executable
+                        subprocess.Popen([python_exe, server_script], cwd=os.path.dirname(server_script))
+                        time.sleep(0.4)
 
             webbrowser.open("http://127.0.0.1:8000")
 

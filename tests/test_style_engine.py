@@ -187,7 +187,12 @@ class TestStyleEngineCoordination(unittest.TestCase):
             "custom_persona_prompt": "Make it brief and clear."
         }
         self.mock_mgr.get_active_style.return_value = "casual"
+        self.patcher = patch("config.load_config", return_value={"engine_mode": "local", "groq_api_key": ""})
+        self.patcher.start()
         self.engine = StyleEngine(voice_profile_manager=self.mock_mgr)
+
+    def tearDown(self):
+        self.patcher.stop()
 
     def test_dispatch_casual_style(self):
         text = "Good morning everyone, please review the PR."
