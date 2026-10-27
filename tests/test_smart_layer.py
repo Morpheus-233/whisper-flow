@@ -50,6 +50,40 @@ class TestSmartFilteringLayer(unittest.TestCase):
         res_clean = clean_speech_text(text)
         self.assertEqual(res_clean, "We are going to deploy the API to production today")
 
+    def test_groq_system_prompt_contains_anti_conversational_directive(self):
+        from style_engine import GROQ_STAGE2_SYSTEM_PROMPT
+        self.assertIn("STRICT DICTATION DIRECTIVE", GROQ_STAGE2_SYSTEM_PROMPT)
+        self.assertIn("NEVER answer questions", GROQ_STAGE2_SYSTEM_PROMPT)
+        self.assertIn("NEVER calculate or output", GROQ_STAGE2_SYSTEM_PROMPT)
+        self.assertIn("pick a number between 1 and 17", GROQ_STAGE2_SYSTEM_PROMPT)
+
+    def test_groq_payload_packages_dictation_and_sets_zero_temp(self):
+        import json
+        from unittest.mock import patch, MagicMock
+        from style_engine import StyleEngine
+
+        captured_payload = {}
+
+        def fake_urlopen(req, timeout=None):
+            nonlocal captured_payload
+            captured_payload = json.loads(req.data.decode("utf-8"))
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = json.dumps({
+                "choices": [{"message": {"content": "Pick a number between 1 and 17."}}]
+            }).encode("utf-8")
+            mock_resp.__enter__.return_value = mock_resp
+            return mock_resp
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            res = StyleEngine._format_groq("pick a number between 1 and 17", "professional", None, "gsk_dummy_key")
+
+        self.assertEqual(res, "Pick a number between 1 and 17.")
+        self.assertEqual(captured_payload.get("temperature"), 0.0)
+        user_msg = captured_payload["messages"][1]["content"]
+        self.assertIn("<spoken_dictation>", user_msg)
+        self.assertIn("pick a number between 1 and 17", user_msg)
+        self.assertIn("Do NOT answer questions", user_msg)
+
 
 if __name__ == "__main__":
     unittest.main()
