@@ -9,6 +9,7 @@ datas = [
     ('data', 'data'),
     ('studio', 'studio'),
     ('ui', 'ui'),
+    ('assets', 'assets'),
 ]
 
 binaries = []
@@ -102,6 +103,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
+    icon='assets/icon.ico',
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

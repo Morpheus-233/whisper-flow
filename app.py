@@ -405,7 +405,12 @@ class WhisperFlowApp:
         return pixmap
 
     def _setup_tray_icon(self):
-        self.tray_icon = QSystemTrayIcon(QIcon(self._create_tray_icon_pixmap()), self.widget)
+        icon_path = get_resource_path(os.path.join("assets", "icon.ico"))
+        if os.path.exists(icon_path):
+            app_icon = QIcon(icon_path)
+        else:
+            app_icon = QIcon(self._create_tray_icon_pixmap())
+        self.tray_icon = QSystemTrayIcon(app_icon, self.widget)
         self.tray_icon.setToolTip("Whisper Flow (Ctrl+Shift+Space)")
 
         tray_menu = QMenu()
@@ -887,6 +892,10 @@ def main(mutex_handle=None):
         # Primary instance: initialize Qt application
         app = QApplication(sys.argv)
         app.setQuitOnLastWindowClosed(False)
+
+        icon_path = get_resource_path(os.path.join("assets", "icon.ico"))
+        if os.path.exists(icon_path):
+            app.setWindowIcon(QIcon(icon_path))
 
         # Clean up any leftover dead pipe/socket from a prior crash or reboot
         QLocalServer.removeServer(SINGLE_INSTANCE_IPC_NAME)

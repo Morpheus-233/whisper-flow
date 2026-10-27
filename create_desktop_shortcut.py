@@ -21,7 +21,13 @@ def create_shortcut(target_exe=None):
         target_path = os.path.abspath(target_exe)
         working_dir = os.path.dirname(target_path)
         arguments = ""
-        icon_location = f"{target_path},0"
+        app_ico = os.path.join(working_dir, "assets", "icon.ico")
+        if not os.path.exists(app_ico):
+            app_ico = os.path.join(current_dir, "assets", "icon.ico")
+        if os.path.exists(app_ico):
+            icon_location = f"{app_ico},0"
+        else:
+            icon_location = f"{target_path},0"
     else:
         vbs_path = os.path.join(current_dir, "WhisperFlow_Silent.vbs")
         target_path = "wscript.exe"

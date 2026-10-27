@@ -234,6 +234,13 @@ def run_gui():
     root.geometry("780x560")
     root.minsize(640, 480)
 
+    icon_path = os.path.join(REPO_DIR, "assets", "icon.ico")
+    if os.path.exists(icon_path):
+        try:
+            root.iconbitmap(icon_path)
+        except Exception:
+            pass
+
     # Styling colors
     BG_DARK = "#12101a"
     CARD_BG = "#1a1626"
