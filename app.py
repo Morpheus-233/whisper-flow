@@ -226,9 +226,11 @@ class WhisperFlowApp:
         self._setup_tray_icon()
 
         # Global Mouse Click Listener to immediately react to user clicks in any app
+        self.mouse_listener = None
         self._start_mouse_listener()
 
         # Global Hotkey Listener (Ctrl+Shift+Space & Ctrl+Alt+Space)
+        self.keyboard_listener = None
         self._start_hotkey_listener()
 
         # Pre-warm Whisper Model in background so transcription is instant
@@ -372,24 +374,24 @@ class WhisperFlowApp:
 
     def _start_mouse_listener(self):
         """Global mouse listener to immediately detect text box clicks anywhere in Windows."""
-        def run_mouse():
-            try:
-                from pynput import mouse
+        try:
+            from pynput import mouse
 
-                def on_click(x, y, button, pressed):
-                    # If click was on our widget, ignore so widget buttons aren't disturbed
-                    if self.widget and self.widget.isVisible():
-                        geom = self.widget.geometry()
-                        if geom.contains(int(x), int(y)):
-                            return
-                    self.signals.mouse_clicked.emit(int(x), int(y))
+            def on_click(x, y, button, pressed):
+                # If click was on our widget, ignore so widget buttons aren't disturbed
+                if not pressed:
+                    return
+                if self.widget and self.widget.isVisible():
+                    geom = self.widget.geometry()
+                    if geom.contains(int(x), int(y)):
+                        return
+                self.signals.mouse_clicked.emit(int(x), int(y))
 
-                with mouse.Listener(on_click=on_click) as listener:
-                    listener.join()
-            except Exception as e:
-                print(f"[App] Mouse listener notice: {e}")
-
-        threading.Thread(target=run_mouse, daemon=True).start()
+            self.mouse_listener = mouse.Listener(on_click=on_click)
+            self.mouse_listener.daemon = True
+            self.mouse_listener.start()
+        except Exception as e:
+            print(f"[App] Mouse listener notice: {e}")
 
     def _create_tray_icon_pixmap(self):
         pixmap = QPixmap(32, 32)
@@ -541,36 +543,34 @@ class WhisperFlowApp:
 
     def _start_hotkey_listener(self):
         """Global background keyboard hotkey listener for Ctrl+Shift+Space and Ctrl+Alt+Space."""
-        def run_hotkey():
-            try:
-                from pynput import keyboard
-                current_keys = set()
-                last_trigger_time = 0
+        try:
+            from pynput import keyboard
+            current_keys = set()
+            last_trigger_time = 0
 
-                def on_press(key):
-                    nonlocal last_trigger_time
-                    current_keys.add(key)
+            def on_press(key):
+                nonlocal last_trigger_time
+                current_keys.add(key)
 
-                    is_ctrl = any(k in current_keys for k in [keyboard.Key.ctrl_l, keyboard.Key.ctrl_r, keyboard.Key.ctrl])
-                    is_shift = any(k in current_keys for k in [keyboard.Key.shift_l, keyboard.Key.shift_r, keyboard.Key.shift])
-                    is_alt = any(k in current_keys for k in [keyboard.Key.alt_l, keyboard.Key.alt_r, keyboard.Key.alt_gr, keyboard.Key.alt])
-                    is_space = (key == keyboard.Key.space)
+                is_ctrl = any(k in current_keys for k in [keyboard.Key.ctrl_l, keyboard.Key.ctrl_r, keyboard.Key.ctrl])
+                is_shift = any(k in current_keys for k in [keyboard.Key.shift_l, keyboard.Key.shift_r, keyboard.Key.shift])
+                is_alt = any(k in current_keys for k in [keyboard.Key.alt_l, keyboard.Key.alt_r, keyboard.Key.alt_gr, keyboard.Key.alt])
+                is_space = (key == keyboard.Key.space)
 
-                    if is_space and is_ctrl and (is_shift or is_alt):
-                        now = time.time()
-                        if now - last_trigger_time > 0.4:
-                            last_trigger_time = now
-                            self.signals.toggle_recording.emit()
+                if is_space and is_ctrl and (is_shift or is_alt):
+                    now = time.time()
+                    if now - last_trigger_time > 0.4:
+                        last_trigger_time = now
+                        self.signals.toggle_recording.emit()
 
-                def on_release(key):
-                    current_keys.discard(key)
+            def on_release(key):
+                current_keys.discard(key)
 
-                with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-                    listener.join()
-            except Exception as e:
-                print(f"[App] Global hotkey listener notice: {e}")
-
-        threading.Thread(target=run_hotkey, daemon=True).start()
+            self.keyboard_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+            self.keyboard_listener.daemon = True
+            self.keyboard_listener.start()
+        except Exception as e:
+            print(f"[App] Global hotkey listener notice: {e}")
 
     def _prewarm_model(self):
         print("[App] Pre-warming Whisper model...")
@@ -863,22 +863,68 @@ class WhisperFlowApp:
 
     def exit_app(self):
         log_debug("exit_app: shutting down application")
-        save_config(self.config)
-        self.focus_detector.cleanup()
+        try:
+            if hasattr(self, 'periodic_focus_timer') and self.periodic_focus_timer:
+                self.periodic_focus_timer.stop()
+            if hasattr(self, 'visibility_debounce_timer') and self.visibility_debounce_timer:
+                self.visibility_debounce_timer.stop()
+        except Exception:
+            pass
+
+        if hasattr(self, 'mouse_listener') and self.mouse_listener:
+            try:
+                self.mouse_listener.stop()
+            except Exception:
+                pass
+
+        if hasattr(self, 'keyboard_listener') and self.keyboard_listener:
+            try:
+                self.keyboard_listener.stop()
+            except Exception:
+                pass
+
+        if hasattr(self, 'focus_detector') and self.focus_detector:
+            try:
+                self.focus_detector.cleanup()
+            except Exception:
+                pass
+
+        if hasattr(self, 'tray_icon') and self.tray_icon:
+            try:
+                self.tray_icon.hide()
+            except Exception:
+                pass
+
+        if hasattr(self, 'widget') and self.widget:
+            try:
+                self.widget.close()
+            except Exception:
+                pass
+
         if hasattr(self, 'ipc_server') and self.ipc_server:
             try:
                 self.ipc_server.close()
                 QLocalServer.removeServer(SINGLE_INSTANCE_IPC_NAME)
             except Exception:
                 pass
+
         if hasattr(self, 'mutex_handle') and self.mutex_handle:
             try:
                 kernel32.CloseHandle(self.mutex_handle)
+                self.mutex_handle = None
             except Exception:
                 pass
-        if self.audio_engine.is_recording:
-            self.audio_engine.stop_recording()
+
+        if hasattr(self, 'audio_engine') and self.audio_engine and self.audio_engine.is_recording:
+            try:
+                self.audio_engine.stop_recording()
+            except Exception:
+                pass
+
+        save_config(self.config)
         QApplication.quit()
+        # Fallback safety timer: guarantees instantaneous termination without Py_FinalizeEx deadlock
+        QTimer.singleShot(250, lambda: os._exit(0))
 
 def main(mutex_handle=None):
     log_debug("=== main() started ===")
@@ -930,7 +976,7 @@ def main(mutex_handle=None):
         log_debug("Entering Qt application event loop (app.exec)...")
         exit_code = app.exec()
         log_debug(f"app.exec() exited with code: {exit_code}")
-        sys.exit(exit_code)
+        os._exit(exit_code)
     except SystemExit as se:
         log_debug(f"SystemExit encountered: {se.code}")
         raise
