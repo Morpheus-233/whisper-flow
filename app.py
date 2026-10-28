@@ -864,67 +864,50 @@ class WhisperFlowApp:
     def exit_app(self):
         log_debug("exit_app: shutting down application")
         try:
-            if hasattr(self, 'periodic_focus_timer') and self.periodic_focus_timer:
-                self.periodic_focus_timer.stop()
-            if hasattr(self, 'visibility_debounce_timer') and self.visibility_debounce_timer:
-                self.visibility_debounce_timer.stop()
-        except Exception:
-            pass
-
-        if hasattr(self, 'mouse_listener') and self.mouse_listener:
-            try:
-                self.mouse_listener.stop()
-            except Exception:
-                pass
-
-        if hasattr(self, 'keyboard_listener') and self.keyboard_listener:
-            try:
-                self.keyboard_listener.stop()
-            except Exception:
-                pass
-
-        if hasattr(self, 'focus_detector') and self.focus_detector:
-            try:
-                self.focus_detector.cleanup()
-            except Exception:
-                pass
-
-        if hasattr(self, 'tray_icon') and self.tray_icon:
-            try:
+            # 1. Immediately hide UI from screen (both Qt and Win32 SW_HIDE)
+            if hasattr(self, 'widget') and self.widget:
+                self.widget.hide()
+                try:
+                    hwnd = int(self.widget.winId()) if self.widget else 0
+                    if hwnd:
+                        user32.ShowWindow(hwnd, 0)  # SW_HIDE
+                except Exception:
+                    pass
+            if hasattr(self, 'tray_icon') and self.tray_icon:
                 self.tray_icon.hide()
-            except Exception:
-                pass
+        except Exception as e:
+            log_debug(f"exit_app hide error: {e}")
 
-        if hasattr(self, 'widget') and self.widget:
-            try:
-                self.widget.close()
-            except Exception:
-                pass
+        try:
+            # 2. Stop audio recording if in progress
+            if hasattr(self, 'audio_engine') and self.audio_engine and self.audio_engine.is_recording:
+                self.audio_engine.stop_recording()
+        except Exception as e:
+            log_debug(f"exit_app audio stop error: {e}")
 
-        if hasattr(self, 'ipc_server') and self.ipc_server:
-            try:
-                self.ipc_server.close()
-                QLocalServer.removeServer(SINGLE_INSTANCE_IPC_NAME)
-            except Exception:
-                pass
+        try:
+            # 3. Save configuration
+            save_config(self.config)
+        except Exception as e:
+            log_debug(f"exit_app save_config error: {e}")
 
-        if hasattr(self, 'mutex_handle') and self.mutex_handle:
-            try:
+        try:
+            # 4. Release single-instance mutex and IPC server
+            if hasattr(self, 'mutex_handle') and self.mutex_handle:
                 kernel32.CloseHandle(self.mutex_handle)
                 self.mutex_handle = None
-            except Exception:
-                pass
+            if hasattr(self, 'ipc_server') and self.ipc_server:
+                self.ipc_server.close()
+                QLocalServer.removeServer(SINGLE_INSTANCE_IPC_NAME)
+        except Exception as e:
+            log_debug(f"exit_app mutex/ipc error: {e}")
 
-        if hasattr(self, 'audio_engine') and self.audio_engine and self.audio_engine.is_recording:
-            try:
-                self.audio_engine.stop_recording()
-            except Exception:
-                pass
-
-        save_config(self.config)
-        QApplication.quit()
-        # Fallback safety timer: guarantees instantaneous termination without Py_FinalizeEx deadlock
-        QTimer.singleShot(250, lambda: os._exit(0))
+        log_debug("exit_app: clean exit complete, invoking TerminateProcess/os._exit(0)")
+        try:
+            kernel32.TerminateProcess(kernel32.GetCurrentProcess(), 0)
+        except Exception:
+            pass
+        os._exit(0)
 
 def main(mutex_handle=None):
     log_debug("=== main() started ===")
@@ -965,6 +948,8 @@ def main(mutex_handle=None):
                         log_debug(f"IPC server received command: {data.strip()}")
                         if "SHOW" in data:
                             flow.show_widget_requested()
+                        elif "EXIT" in data:
+                            flow.exit_app()
                     except Exception as e:
                         log_debug(f"IPC Server error handling command: {e}")
                 client.readyRead.connect(on_read)
@@ -976,6 +961,10 @@ def main(mutex_handle=None):
         log_debug("Entering Qt application event loop (app.exec)...")
         exit_code = app.exec()
         log_debug(f"app.exec() exited with code: {exit_code}")
+        try:
+            kernel32.TerminateProcess(kernel32.GetCurrentProcess(), exit_code)
+        except Exception:
+            pass
         os._exit(exit_code)
     except SystemExit as se:
         log_debug(f"SystemExit encountered: {se.code}")
