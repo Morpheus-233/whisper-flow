@@ -78,13 +78,19 @@ class FloatingWidget(QWidget):
         # Start in compact idle dock size
         self.setFixedSize(self.dock_w + self.pad_x * 2, self.dock_h + self.pad_y * 2)
 
-        # Positioning
-        screen = QApplication.primaryScreen().geometry()
+        # Positioning: clamp safely to visible desktop work area (never behind taskbar)
+        primary = QApplication.primaryScreen()
+        avail = primary.availableGeometry() if primary else QApplication.primaryScreen().geometry()
         init_x = self.config.get("window_x")
         init_y = self.config.get("window_y")
         if init_x is None or init_y is None or not QApplication.screenAt(QPoint(int(init_x), int(init_y))):
-            init_x = screen.width() // 2 - (self.width() // 2)
-            init_y = screen.height() - self.height() - 90
+            init_x = avail.x() + avail.width() // 2 - (self.width() // 2)
+            init_y = avail.y() + avail.height() - self.height() - 40
+        else:
+            sc = QApplication.screenAt(QPoint(int(init_x), int(init_y)))
+            s_avail = sc.availableGeometry() if sc else avail
+            init_x = max(s_avail.left() + 10, min(int(init_x), s_avail.right() - self.width() - 10))
+            init_y = max(s_avail.top() + 10, min(int(init_y), s_avail.bottom() - self.height() - 10))
         self.move(int(init_x), int(init_y))
 
         self._press_pos = QPoint()

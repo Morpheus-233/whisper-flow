@@ -239,6 +239,9 @@ class WhisperFlowApp:
         # Initial visibility evaluation after window subsystem stabilizes (30ms)
         self.visibility_debounce_timer.start(30)
 
+        # Show tray balloon on startup so user gets immediate visual confirmation
+        QTimer.singleShot(1200, lambda: self._show_tray_message("Whisper Flow is active! Press Ctrl+Shift+Space to dictate anywhere."))
+
     def _setup_connections(self):
         self.widget.toggle_recording_requested.connect(self.toggle_recording)
         self.widget.cancel_recording_requested.connect(self.cancel_recording)
@@ -707,6 +710,8 @@ class WhisperFlowApp:
                     pass
 
                 dlg = SettingsDialog(self.config, self.audio_engine, self.whisper_engine, parent=None)
+                if bring_to_front:
+                    dlg.setWindowFlags(dlg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
                 self.active_dialog = dlg
                 dlg.engine_changed.connect(self._on_engine_changed)
                 dlg.language_changed.connect(self._on_language_changed)
@@ -847,7 +852,19 @@ class WhisperFlowApp:
         Invoked when another instance launch is attempted (e.g. user double-clicked Desktop icon).
         Explicitly shows the widget and opens Preferences so the user gets immediate visual confirmation.
         """
+        log_debug("show_widget_requested: activating UI and opening preferences")
         self.manual_show_until = time.time() + 60.0
+        
+        primary = QApplication.primaryScreen()
+        if primary:
+            avail = primary.availableGeometry()
+            # If current position is in extreme corner or hidden, center it safely above taskbar
+            if not self.widget.isVisible() or self.widget.y() > avail.bottom() - 30:
+                self.widget.move(
+                    avail.x() + avail.width() // 2 - (self.widget.width() // 2),
+                    avail.y() + avail.height() - self.widget.height() - 40
+                )
+
         if self.widget.isMinimized():
             self.widget.showNormal()
         self.widget.show()
@@ -859,6 +876,9 @@ class WhisperFlowApp:
             pass
         self.widget.activateWindow()
         self._evaluate_visibility()
+        
+        # Immediate notification balloon confirmation
+        self._show_tray_message("Whisper Flow is already running! Press Ctrl+Shift+Space to dictate.")
         self.open_settings(bring_to_front=True)
 
     def exit_app(self):
